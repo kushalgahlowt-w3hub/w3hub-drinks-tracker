@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>w3.hub · Admin Analytics Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Styling -->
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- For PDF export -->
+    <script src="https://cdn.jsdelivr.net/npm/jspdf"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable"></script>
+</head>
+
+<body data-role="admin">
+
+<header style="
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:10px 14px;
+    border-bottom:1px solid #2a2d35;
+    background:#0e0f14;">
+    <div style="display:flex; align-items:baseline; gap:6px;">
+        <span style="
+            color:#4ccbff;
+            font-weight:500;
+            border:1px solid rgba(76,203,255,0.6);
+            border-radius:999px;
+            padding:2px 8px 4px;
+            text-shadow:0 0 6px rgba(76,203,255,0.7);
+            font-size:16px;">
+            w3
+        </span>
+        <span style="
+            color:#4ccbff;
+            font-size:18px;
+            text-shadow:0 0 6px rgba(76,203,255,0.7);">.</span>
+        <span style="
+            color:#b8ffb5;
+            font-weight:700;
+            font-size:18px;
+            text-shadow:0 0 8px rgba(184,255,181,0.7);">
+            hub
+        </span>
+
+        <span style="color:#8c8f94; font-size:11px; margin-left:8px;">
+            Admin Dashboard
+        </span>
+    </div>
+
+    <button id="logout-btn" style="
+        background:none;
+        border:1px solid #2a2d35;
+        color:#8c8f94;
+        padding:6px 12px;
+        border-radius:6px;
+        cursor:pointer;">
+        Logout
+    </button>
+</header>
+
+<div style="padding: 20px;">
+
+    <h1 style="color:#e9e9e9;">Admin Analytics Dashboard</h1>
+    <p style="color:#8c8f94; margin-top:4px;">Filter events, view consumption data, export reports.</p>
+
+    <hr style="border-color:#2a2d35; margin: 20px 0;">
+
+    <!-- MULTI-EVENT FILTER -->
+    <section>
+        <h2 style="color:#b8ffb5;">Select Events</h2>
+        <div id="event-checkboxes" style="margin-top:10px;"></div>
+
+        <button id="apply-event-filter" style="
+            margin-top:10px;
+            padding:8px 14px;
+            border-radius:6px;
+            border:none;
+            background:#4ccbff;
+            color:#050609;
+            font-weight:600;
+            cursor:pointer;">
+            Apply Selection
+        </button>
+    </section>
+
+    <hr style="border-color:#2a2d35; margin: 20px 0;">
+
+    <!-- CHARTS -->
+    <section>
+        <h2 style="color:#b8ffb5;">Analytics</h2>
+
+        <div style="height:300px; margin:20px 0;">
+            <canvas id="chart-time-series"></canvas>
+        </div>
+
+        <div style="height:300px; margin:20px 0;">
+            <canvas id="chart-drink-breakdown"></canvas>
+        </div>
+
+        <div style="height:300px; margin:20px 0;">
+            <canvas id="chart-fridge-breakdown"></canvas>
+        </div>
+
+        <h3 style="margin-top:40px; color:#b8ffb5;">Restock Heatmap</h3>
+        <div style="overflow-x:auto;">
+            <table id="heatmap-table" class="dark-table"></table>
+        </div>
+    </section>
+
+    <hr style="border-color:#2a2d35; margin: 20px 0;">
+
+    <!-- DRILLDOWN TABLE -->
+    <section id="drilldown-section">
+        <h2 style="color:#b8ffb5;">Detailed Log</h2>
+
+        <!-- FILTERS -->
+        <div style="margin-bottom:12px; display:flex; gap:10px; flex-wrap:wrap;">
+            <select id="filter-fridge" class="filter-dropdown">
+                <option value="">All Fridges</option>
+            </select>
+
+            <select id="filter-drink" class="filter-dropdown">
+                <option value="">All Drinks</option>
+            </select>
+
+            <select id="filter-action" class="filter-dropdown">
+                <option value="">All Actions</option>
+                <option value="start">Start</option>
+                <option value="restock">Restock</option>
+                <option value="end">End</option>
+            </select>
+
+            <input id="filter-search" class="filter-input" placeholder="Search text…">
+        </div>
+
+        <!-- TABLE -->
+        <div style="overflow-x:auto;">
+            <table id="drilldown-table" class="dark-table">
+                <thead>
+                <tr>
+                    <th data-sort="created_at">Time</th>
+                    <th data-sort="fridge_name">Fridge</th>
+                    <th data-sort="drink_name">Drink</th>
+                    <th data-sort="action_type">Action</th>
+                    <th data-sort="amount">Amount</th>
+                </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </section>
+
+    <hr style="border-color:#2a2d35; margin: 20px 0;">
+
+    <button id="export-csv-btn" style="
+        padding:10px 20px;
+        background:#4ccbff;
+        color:#050609;
+        border:none;
+        border-radius:8px;
+        cursor:pointer;
+        font-weight:600;">
+        Export CSV
+    </button>
+
+    <button id="download-pdf-btn" style="
+        padding:10px 20px;
+        margin-left:10px;
+        background:#b8ffb5;
+        color:#050609;
+        border:none;
+        border-radius:8px;
+        cursor:pointer;
+        font-weight:600;">
+        Download Event PDF
+    </button>
+
+</div>
+
+
+<!-- Supabase + Auth -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+    const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
+    const SUPABASE_ANON_KEY =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+</script>
+
+<script defer src="auth.js"></script>
+<script defer src="admin_reports.js"></script>
+
+</body>
+</html>
