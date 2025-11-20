@@ -1,125 +1,171 @@
-// -----------------------------
-// Supabase Client (already loaded in HTML)
-// -----------------------------
-// NOTE: Do NOT create the client here. It is created in each HTML using:
-// const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-// -----------------------------
+// auth.js
+// Route protection + role-based UI for w3.hub drinks tracker.
+// Assumes each HTML page creates a global `supabase` client first.
 
-// Helper: get current page filename
-function currentPage() {
-    const path = window.location.pathname;
-    return path.substring(path.lastIndexOf("/") + 1);
+// ------------- helpers -------------
+
+function getPageKey() {
+  let path = window.location.pathname; // e.g. /runner.html, /runner, /
+  if (!path || path === "/") return "index";
+
+  let last = path.split("/").pop();    // "runner" or "runner.html"
+  if (!last) return "index";
+
+  if (last.endsWith(".html")) {
+    last = last.slice(0, -5);         // strip ".html"
+  }
+  return last;                         // e.g. "runner", "admin_reports"
 }
 
-// List of protected pages
-const ADMIN_ONLY_PAGES = [
-    "admin_reports.html",
-    "dashboard.html",
-    "admin_users.html"
+const LOGIN_PAGE_KEY = "index";
+
+const PUBLIC_PAGE_KEYS = [
+  "index",
+  "reset_password",
+  "update_password",
 ];
 
-const RUNNER_ALLOWED_PAGES = [
-    "runner.html"
+const ADMIN_PAGE_KEYS = [
+  "admin_reports",
+  "dashboard",
+  "admin_users",
 ];
 
-// LOGIN PAGE
-const LOGIN_PAGE = "index.html";
+const RUNNER_PAGE_KEYS = [
+  "runner",
+  "runner_activity" // if later we add a dedicated page
+];
 
-// -----------------------------
-// MAIN AUTH CHECK
-// -----------------------------
+// ------------- main auth check -------------
+
 async function checkAuth() {
-    const page = currentPage();
+  const page = getPageKey();
 
-    // First: check current user session
-    const {
-        data: { session }
-    } = await supabase.auth.getSession();
+  // 1) Get current session
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
-    // -----------------------------
-    // NOT LOGGED IN
-    // -----------------------------
-    if (!session) {
-        // Anyone not logged-in MUST be on the login page
-        if (page !== LOGIN_PAGE) {
-            window.location.href = LOGIN_PAGE;
-        }
-        return;
+  // --- NOT LOGGED IN ---
+  if (!session) {
+    // allow public pages without redirect
+    if (!PUBLIC_PAGE_KEYS.includes(page)) {
+      window.location.href = "index.html";
     }
+    return;
+  }
 
-    // User is logged in → get profile from "users" table
-    const userEmail = session.user.email;
+  // --- LOGGED IN: find role in users table ---
+  const userEmail = session.user.email;
 
-    const { data: userRow, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("email", userEmail)
-        .single();
+  const { data: userRow, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("email", userEmail)
+    .single();
 
-    if (error || !userRow) {
-        // Logged in but no role assigned → logout for safety
-        await supabase.auth.signOut();
-        window.location.href = LOGIN_PAGE;
-        return;
-    }
-
-    const role = userRow.role; // "admin" or "runner"
-
-    // -----------------------------
-    // REDIRECT LOGGED-IN USERS AWAY FROM LOGIN PAGE
-    // -----------------------------
-    if (page === LOGIN_PAGE) {
-        if (role === "admin") {
-            window.location.href = "admin_reports.html";
-            return;
-        }
-        if (role === "runner") {
-            window.location.href = "runner.html";
-            return;
-        }
-    }
-
-    // -----------------------------
-    // ADMIN PAGE PROTECTION
-    // -----------------------------
-    if (ADMIN_ONLY_PAGES.includes(page)) {
-        if (role !== "admin") {
-            // Runner tries to access admin page → redirect
-            window.location.href = "runner.html";
-            return;
-        }
-    }
-
-    // -----------------------------
-    // RUNNER PAGE PROTECTION
-    // -----------------------------
-    if (RUNNER_ALLOWED_PAGES.includes(page)) {
-
-        // RUNNER allowed
-        if (role === "runner") return;
-
-        // ADMIN ALSO allowed
-        if (role === "admin") return;
-
-        // Unknown → logout
-        await supabase.auth.signOut();
-        window.location.href = LOGIN_PAGE;
-        return;
-    }
-}
-
-// -----------------------------
-// LOGOUT HANDLER
-// -----------------------------
-async function logoutUser() {
+  if (error || !userRow) {
+    // Auth user exists but no row in users table → log out
     await supabase.auth.signOut();
-    window.location.href = LOGIN_PAGE;
+    window.location.href = "index.html";
+    return;
+  }
+
+  const role = userRow.role; // "admin" or "runner"
+  window.currentUserRole = role;
+
+  // --- LOGGED IN BUT ON PUBLIC PAGE (except update_password) ---
+  if (PUBLIC_PAGE_KEYS.includes(page) && page !== "update_password") {
+    if (role === "admin") {
+      window.location.href = "admin_reports.html";
+    } else if (role === "runner") {
+      window.location.href = "runner.html";
+    }
+    return;
+  }
+
+  // --- ADMIN PAGES ---
+  if (ADMIN_PAGE_KEYS.includes(page)) {
+    if (role !== "admin") {
+      // runners get kicked to runner mode
+      window.location.href = "runner.html";
+      return;
+    }
+  }
+
+  // --- RUNNER PAGES ---
+  if (RUNNER_PAGE_KEYS.includes(page)) {
+    if (role !== "admin" && role !== "runner") {
+      await supabase.auth.signOut();
+      window.location.href = "index.html";
+      return;
+    }
+  }
+
+  // Apply UI visibility rules
+  applyRoleUI(role);
 }
 
-// Expose logout function globally
+// ------------- role-based UI tweaks -------------
+
+function applyRoleUI(role) {
+  // Hide admin-only things for runners
+  const adminOnlyEls = document.querySelectorAll("[data-role='admin-only']");
+  adminOnlyEls.forEach((el) => {
+    if (role !== "admin") {
+      el.style.display = "none";
+    }
+  });
+
+  // Hide runner-only things for admins (if desired)
+  const runnerOnlyEls = document.querySelectorAll("[data-role='runner-only']");
+  runnerOnlyEls.forEach((el) => {
+    if (role === "admin") {
+      el.style.display = "none";
+    }
+  });
+}
+
+// ------------- logout -------------
+
+async function logoutUser() {
+  await supabase.auth.signOut();
+  window.location.href = "index.html";
+}
 window.logoutUser = logoutUser;
 
-// Run auth check on every protected page EXCEPT login page
+// ------------- clean stray auth params (fix token error) -------------
+
+function cleanAuthQueryParams() {
+  // Some Supabase flows leave ?code=...&state=... in the URL.
+  // If code_verifier is missing (Safari / back button), Supabase complains.
+  const url = new URL(window.location.href);
+  let changed = false;
+
+  if (url.searchParams.has("code")) {
+    url.searchParams.delete("code");
+    changed = true;
+  }
+  if (url.searchParams.has("state")) {
+    url.searchParams.delete("state");
+    changed = true;
+  }
+
+  if (changed) {
+    const newUrl =
+      url.pathname +
+      (url.searchParams.toString()
+        ? "?" + url.searchParams.toString()
+        : "") +
+      url.hash;
+    window.history.replaceState({}, document.title, newUrl);
+  }
+}
+
+// ------------- init -------------
+
 document.addEventListener("DOMContentLoaded", () => {
-    checkAuth();
+  cleanAuthQueryParams();
+  checkAuth();
 });
+

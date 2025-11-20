@@ -1,6 +1,8 @@
 // runner.js
 // Supabase client is already created in runner.html
 
+let currentUserId = null;
+
 // Helper: get selected mode (start / restock / end)
 function getSelectedMode() {
     const radios = document.querySelectorAll('input[name="mode"]');
@@ -8,6 +10,18 @@ function getSelectedMode() {
         if (r.checked) return r.value;
     }
     return "start";
+}
+
+// -------------------------
+// LOAD CURRENT USER
+// -------------------------
+async function loadCurrentUser() {
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data?.user) {
+        console.error("Could not get current user:", error);
+        return;
+    }
+    currentUserId = data.user.id;
 }
 
 // -------------------------
@@ -42,8 +56,6 @@ async function loadEvents() {
     });
 }
 
-loadEvents();
-
 // -------------------------
 // LOAD FLOORS
 // -------------------------
@@ -77,7 +89,14 @@ async function loadFloors() {
     await loadFridges();
 }
 
-loadFloors();
+document.addEventListener("DOMContentLoaded", async () => {
+    await loadCurrentUser();
+    await loadEvents();
+    await loadFloors();
+    await loadDrinkTypes();
+    await loadHistory();
+    await loadMyActivity();
+});
 
 // -------------------------
 // LOAD FRIDGES FOR SELECTED FLOOR
@@ -151,8 +170,6 @@ async function loadDrinkTypes() {
     });
 }
 
-loadDrinkTypes();
-
 // -------------------------
 // RELOAD HISTORY WHEN ANY KEY SELECTION CHANGES
 // -------------------------
@@ -161,7 +178,7 @@ document.getElementById("fridge-select").addEventListener("change", loadHistory)
 document.getElementById("drink-select").addEventListener("change", loadHistory);
 
 // -------------------------
-// LOAD HISTORY (last 10 actions)
+// LOAD HISTORY (last 10 actions for selected combo)
 // -------------------------
 async function loadHistory() {
     const event_id = document.getElementById("event-select").value;
@@ -225,6 +242,106 @@ async function loadHistory() {
 }
 
 // -------------------------
+// LOAD "MY ACTIVITY" (last 20 logs for this user)
+// -------------------------
+async function loadMyActivity() {
+    const tbody = document.getElementById("my-activity-body");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    if (!currentUserId) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 7;
+        td.textContent = "Could not identify current user.";
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+        return;
+    }
+
+    // We only select by user_id; denormalised info is later resolved via separate lookups in reports,
+    // but here we show raw info with minimal joins (time, action, amount, IDs).
+    const { data, error } = await supabase
+        .from("fridge_log_entries")
+        .select("*")
+        .eq("user_id", currentUserId)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+    if (error) {
+        console.error("Error loading my activity:", error);
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 7;
+        td.textContent = "Error loading your activity.";
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+        return;
+    }
+
+    if (!data || data.length === 0) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 7;
+        td.textContent = "No recent activity.";
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+        return;
+    }
+
+    // To show event / floor / fridge / drink names, we need a small lookup call.
+    const [eventsRes, floorsRes, fridgesRes, drinksRes] = await Promise.all([
+        supabase.from("events").select("id, name"),
+        supabase.from("floors").select("id, name"),
+        supabase.from("fridges").select("id, name, floor_id"),
+        supabase.from("drink_types").select("id, name")
+    ]);
+
+    const eventsById = {};
+    const floorsById = {};
+    const fridgesById = {};
+    const drinksById = {};
+
+    (eventsRes.data || []).forEach(e => eventsById[e.id] = e);
+    (floorsRes.data || []).forEach(f => floorsById[f.id] = f);
+    (fridgesRes.data || []).forEach(fr => fridgesById[fr.id] = fr);
+    (drinksRes.data || []).forEach(d => drinksById[d.id] = d);
+
+    data.forEach(entry => {
+        const tr = document.createElement("tr");
+
+        const d = new Date(entry.created_at);
+        const timeStr = d.toLocaleString();
+
+        const event = eventsById[entry.event_id];
+        const fridge = fridgesById[entry.fridge_id];
+        const drink = drinksById[entry.drink_type_id];
+        const floor = fridge && floorsById[fridge.floor_id];
+
+        const eventName = event ? event.name : "";
+        const floorName = floor ? floor.name : "";
+        const fridgeName = fridge ? fridge.name : "";
+        const drinkName = drink ? drink.name : "";
+
+        addCell(tr, timeStr);
+        addCell(tr, eventName);
+        addCell(tr, floorName);
+        addCell(tr, fridgeName);
+        addCell(tr, drinkName);
+        addCell(tr, entry.action_type || "");
+        addCell(tr, entry.amount != null ? String(entry.amount) : "");
+
+        tbody.appendChild(tr);
+    });
+}
+
+function addCell(tr, text) {
+    const td = document.createElement("td");
+    td.textContent = text;
+    tr.appendChild(td);
+}
+
+// -------------------------
 // SUBMIT LOG (one action = one row)
 // -------------------------
 document.getElementById("log-form").addEventListener("submit", async (e) => {
@@ -241,11 +358,11 @@ document.getElementById("log-form").addEventListener("submit", async (e) => {
 
     const status = document.getElementById("log-status");
     status.textContent = "";
-    status.className = "";
+    status.className = "status-text";
 
     if (!event_id || !fridge_id || !drink_type_id) {
         status.textContent = "❌ Please select event, floor, fridge, and drink.";
-        status.className = "error";
+        status.classList.add("error");
         return;
     }
 
@@ -254,21 +371,21 @@ document.getElementById("log-form").addEventListener("submit", async (e) => {
     if (mode === "start") {
         if (startVal === "") {
             status.textContent = "❌ Please enter a start count.";
-            status.className = "error";
+            status.classList.add("error");
             return;
         }
         amount = parseInt(startVal, 10);
     } else if (mode === "restock") {
         if (restockVal === "") {
             status.textContent = "❌ Please enter a restock amount.";
-            status.className = "error";
+            status.classList.add("error");
             return;
         }
         amount = parseInt(restockVal, 10);
     } else if (mode === "end") {
         if (endVal === "") {
             status.textContent = "❌ Please enter an end count.";
-            status.className = "error";
+            status.classList.add("error");
             return;
         }
         amount = parseInt(endVal, 10);
@@ -276,11 +393,11 @@ document.getElementById("log-form").addEventListener("submit", async (e) => {
 
     if (isNaN(amount) || amount < 0) {
         status.textContent = "❌ Amount must be a non-negative number.";
-        status.className = "error";
+        status.classList.add("error");
         return;
     }
 
-    // Insert a new action into fridge_log_entries
+    // Insert a new action into fridge_log_entries, now with user_id
     const { error } = await supabase
         .from("fridge_log_entries")
         .insert([
@@ -288,7 +405,7 @@ document.getElementById("log-form").addEventListener("submit", async (e) => {
                 event_id,
                 fridge_id,
                 drink_type_id,
-                user_id: null,        // we'll hook this up to auth later
+                user_id: currentUserId || null,
                 action_type: mode,
                 amount
             }
@@ -297,12 +414,12 @@ document.getElementById("log-form").addEventListener("submit", async (e) => {
     if (error) {
         console.error("Error inserting log entry:", error);
         status.textContent = "❌ Error saving log.";
-        status.className = "error";
+        status.classList.add("error");
         return;
     }
 
     status.textContent = "✅ Log saved!";
-    status.className = "success";
+    status.classList.add("success");
 
     // Clear only the relevant input
     if (mode === "start") {
@@ -313,7 +430,9 @@ document.getElementById("log-form").addEventListener("submit", async (e) => {
         document.getElementById("end-count").value = "";
     }
 
-    // Refresh history so runners see it immediately
+    // Refresh history and my activity so runners see it immediately
     await loadHistory();
+    await loadMyActivity();
 });
+
 

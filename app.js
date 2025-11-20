@@ -51,7 +51,34 @@ async function handleExistingSession() {
   redirectForRole(role);
 }
 
+// Strip stray OAuth params that cause "auth code / code verifier" errors
+function cleanAuthQueryParamsOnLogin() {
+  const url = new URL(window.location.href);
+  let changed = false;
+
+  if (url.searchParams.has("code")) {
+    url.searchParams.delete("code");
+    changed = true;
+  }
+  if (url.searchParams.has("state")) {
+    url.searchParams.delete("state");
+    changed = true;
+  }
+
+  if (changed) {
+    const newUrl =
+      url.pathname +
+      (url.searchParams.toString()
+        ? "?" + url.searchParams.toString()
+        : "") +
+      url.hash;
+    window.history.replaceState({}, document.title, newUrl);
+  }
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
+  cleanAuthQueryParamsOnLogin();
+
   const form = document.getElementById("login-form");
   if (!form) return;
 
@@ -98,3 +125,4 @@ document.addEventListener("DOMContentLoaded", async () => {
     redirectForRole(role);
   });
 });
+

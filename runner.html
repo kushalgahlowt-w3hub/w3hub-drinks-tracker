@@ -26,10 +26,15 @@
         <div class="sidebar-subtitle">Drinks Tracker • Internal tool</div>
 
         <nav class="sidebar-nav">
-            <a href="dashboard.html">Setup · Events / Floors</a>
-            <a href="admin_reports.html">Analytics Dashboard</a>
+            <!-- Admin-only links -->
+            <a href="dashboard.html" data-role="admin-only">Setup · Events / Floors</a>
+            <a href="admin_reports.html" data-role="admin-only">Analytics Dashboard</a>
+            <a href="admin_users.html" data-role="admin-only">User Management</a>
+
+            <!-- Runner + Admin -->
             <a href="runner.html" class="active">Runner Mode</a>
-            <a href="admin_users.html">User Management</a>
+            <!-- My Activity will scroll on this same page to a section -->
+            <a href="#my-activity-section" data-role="runner-only">My Activity</a>
         </nav>
 
         <div class="sidebar-footer">
@@ -47,7 +52,7 @@
                 Start → Restock → End counts for each fridge.
             </p>
 
-            <!-- SUPABASE CLIENT INITIALIZATION (THIS WAS MISSING) -->
+            <!-- SUPABASE CLIENT INITIALIZATION -->
             <script>
                 const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
                 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
@@ -107,9 +112,9 @@
 
             <hr class="divider">
 
-            <!-- HISTORY -->
-            <h2>Recent History</h2>
-            <p class="page-description">Last 10 updates for this event / fridge / drink.</p>
+            <!-- HISTORY FOR CURRENT SELECTION -->
+            <h2>Recent History (This Event / Fridge / Drink)</h2>
+            <p class="page-description">Last 10 updates for the selected event, fridge, and drink.</p>
 
             <table class="history-table">
                 <thead>
@@ -121,6 +126,31 @@
                 </thead>
                 <tbody id="history-body"></tbody>
             </table>
+
+            <hr class="divider">
+
+            <!-- MY ACTIVITY SECTION -->
+            <section id="my-activity-section">
+                <h2>My Activity (Last 20 Logs)</h2>
+                <p class="page-description">
+                    Your most recent 20 submissions across all events and fridges.
+                </p>
+
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Event</th>
+                            <th>Floor</th>
+                            <th>Fridge</th>
+                            <th>Drink</th>
+                            <th>Action</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody id="my-activity-body"></tbody>
+                </table>
+            </section>
 
         </div>
     </main>
@@ -152,6 +182,7 @@
 
 </body>
 </html>
+
 
 
 
