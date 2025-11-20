@@ -2,309 +2,125 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>w3.hub · Admin User Management</title>
+  <title>w3.hub – User Management</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+  <!-- Shared styles -->
   <link rel="stylesheet" href="style.css">
 
-  <style>
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
-      "Segoe UI", sans-serif;
-      background: #050609;
-      color: #e9e9e9;
-    }
-
-    .app-shell {
-      display: flex;
-      min-height: 100vh;
-      background: radial-gradient(circle at top, #181b25 0, #0e0f14 55%, #050609 100%);
-    }
-
-    .sidebar {
-      width: 220px;
-      background: #070810;
-      border-right: 1px solid #22242d;
-      padding: 16px 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .sidebar-logo {
-      display: flex;
-      align-items: baseline;
-      gap: 6px;
-      margin-bottom: 8px;
-    }
-
-    .sidebar-logo-w3 {
-      color: #4ccbff;
-      font-weight: 500;
-      border: 1px solid rgba(76,203,255,0.6);
-      border-radius: 999px;
-      padding: 2px 8px 4px;
-      text-shadow: 0 0 6px rgba(76,203,255,0.7);
-      font-size: 16px;
-    }
-
-    .sidebar-logo-dot {
-      color: #4ccbff;
-      font-size: 18px;
-      text-shadow: 0 0 6px rgba(76,203,255,0.7);
-    }
-
-    .sidebar-logo-hub {
-      color: #b8ffb5;
-      font-weight: 700;
-      font-size: 18px;
-      text-shadow: 0 0 8px rgba(184,255,181,0.7);
-    }
-
-    .sidebar-tagline {
-      font-size: 11px;
-      color: #8c8f94;
-      margin-top: 4px;
-    }
-
-    .nav-section-title {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: #5f6470;
-      margin: 14px 0 6px;
-    }
-
-    .nav-links {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .nav-link {
-      font-size: 13px;
-      color: #c3c6cf;
-      text-decoration: none;
-      padding: 7px 8px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      border: 1px solid transparent;
-    }
-
-    .nav-link:hover {
-      background: rgba(255,255,255,0.04);
-      border-color: #22242d;
-    }
-
-    .nav-link-active {
-      background: linear-gradient(90deg, rgba(76,203,255,0.18), rgba(184,255,181,0.12));
-      border-color: #2f93ff;
-      color: #ffffff;
-    }
-
-    .sidebar-footer {
-      margin-top: auto;
-      font-size: 11px;
-      color: #6d717b;
-    }
-
-    .logout-btn {
-      width: 100%;
-      margin-top: 8px;
-      padding: 7px 10px;
-      border-radius: 8px;
-      border: 1px solid #2a2d35;
-      background: none;
-      color: #c3c6cf;
-      font-size: 12px;
-      cursor: pointer;
-    }
-
-    .logout-btn:hover {
-      background: rgba(255,255,255,0.04);
-    }
-
-    .main-content {
-      flex: 1;
-      padding: 18px 22px 32px;
-    }
-
-    .page-title {
-      font-size: 24px;
-      font-weight: 650;
-      margin: 4px 0;
-    }
-
-    .page-subtitle {
-      font-size: 13px;
-      color: #8c8f94;
-      margin-bottom: 16px;
-    }
-
-    section {
-      margin-top: 16px;
-    }
-
-    form {
-      display:flex;
-      flex-wrap:wrap;
-      gap:10px;
-      align-items:flex-end;
-    }
-
-    label {
-      display:block;
-      font-size:12px;
-      margin-bottom:4px;
-    }
-
-    input[type="email"],
-    select {
-      padding:6px 8px;
-      border-radius:6px;
-      border:1px solid #2a2d35;
-      background:#0f1117;
-      color:#e9e9e9;
-      font-size:13px;
-    }
-
-    button.save-btn {
-      padding:8px 14px;
-      border-radius:8px;
-      border:none;
-      background:#4ccbff;
-      color:#050609;
-      font-weight:600;
-      cursor:pointer;
-      font-size:13px;
-    }
-
-    table.dark-table {
-      width:100%;
-      border-collapse:collapse;
-      font-size:12px;
-      margin-top:8px;
-    }
-
-    table.dark-table th,
-    table.dark-table td {
-      border:1px solid #2a2d35;
-      padding:6px 8px;
-    }
-
-    table.dark-table th {
-      background:#11131b;
-      text-align:left;
-    }
-
-    #user-add-status,
-    #users-status {
-      margin-top:6px;
-      font-size:12px;
-    }
-
-    .remove-btn {
-      font-size:11px;
-      padding:4px 8px;
-      border-radius:6px;
-      border:none;
-      background:#262937;
-      color:#e9e9e9;
-      cursor:pointer;
-    }
-  </style>
+  <!-- Supabase client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Auth guard (protects admin pages) -->
+  <script defer src="auth.js"></script>
 </head>
 
-<body data-role="admin">
-<div class="app-shell">
+<body>
+<div class="layout">
+
   <!-- SIDEBAR -->
   <aside class="sidebar">
-    <div>
-      <div class="sidebar-logo">
-        <span class="sidebar-logo-w3">w3</span>
-        <span class="sidebar-logo-dot">.</span>
-        <span class="sidebar-logo-hub">hub</span>
-      </div>
-      <div class="sidebar-tagline">Drinks Tracker · Internal tool</div>
+    <div class="sidebar-logo">
+      <span class="logo-icon">w3</span><span class="logo-dot">.</span><span class="logo-text">hub</span>
     </div>
+    <div class="sidebar-subtitle">Drinks Tracker • Internal tool</div>
 
-    <div>
-      <div class="nav-section-title">Admin</div>
-      <nav class="nav-links">
-        <a href="dashboard.html" class="nav-link">Setup · Events / Floors</a>
-        <a href="admin_reports.html" class="nav-link">Analytics Dashboard</a>
-        <a href="runner.html" class="nav-link">Runner Mode</a>
-        <a href="admin_users.html" class="nav-link nav-link-active">User Management</a>
-      </nav>
-    </div>
+    <nav class="sidebar-nav">
+      <a href="dashboard.html">Setup · Events / Floors</a>
+      <a href="admin_reports.html">Analytics Dashboard</a>
+      <a href="runner.html">Runner Mode</a>
+      <a href="admin_users.html" class="active">User Management</a>
+    </nav>
 
     <div class="sidebar-footer">
-      Property of w3.hub<br>Internal use only
-      <button class="logout-btn" onclick="logoutUser()">Logout</button>
+      <p>Property of w3.hub<br>Internal use only</p>
+      <button onclick="logoutUser()" class="logout-btn">Logout</button>
     </div>
   </aside>
 
   <!-- MAIN CONTENT -->
-  <main class="main-content">
-    <h1 class="page-title">User Management</h1>
-    <p class="page-subtitle">
-      Manage roles for existing accounts in the <code>users</code> table.
-      Creating login accounts (email &amp; password) still happens in Supabase Auth.
-    </p>
+  <main class="content">
+    <div class="page-card">
 
-    <section>
-      <h2 style="font-size:16px; color:#b8ffb5;">Add or link user</h2>
-      <form id="user-add-form">
-        <div>
-          <label for="user-email">Email</label>
-          <input type="email" id="user-email" required>
-        </div>
-        <div>
+      <h1>User Management</h1>
+      <p class="page-description">
+        Link Supabase Auth users to roles (admin / runner). Only users listed here can access the app.
+      </p>
+
+      <!-- SUPABASE CLIENT INIT -->
+      <script>
+        const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
+        const SUPABASE_ANON_KEY =
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      </script>
+
+      <!-- HOW-TO SECTION -->
+      <section class="analytics-section">
+        <h2>How to add a new user</h2>
+        <ol style="font-size: 13px; color:#9ca0aa; padding-left: 18px;">
+          <li>In Supabase Dashboard → <strong>Authentication → Users</strong>, create a new user with their email.</li>
+          <li>Copy that user’s <strong>UUID</strong> (their <code>id</code> in the Users table).</li>
+          <li>Paste the UUID and email below, choose a role, and click <strong>Add User Mapping</strong>.</li>
+          <li>The user can then go to the login page and use <strong>“Forgot password?”</strong> to set a password.</li>
+        </ol>
+      </section>
+
+      <hr class="divider">
+
+      <!-- ADD USER FORM -->
+      <section class="analytics-section">
+        <h2>Add User Mapping</h2>
+
+        <form id="user-form" class="runner-form">
+          <label for="user-id">Auth user ID (UUID from Supabase Auth)</label>
+          <input type="text" id="user-id" placeholder="e.g. 9b3f2a8c-..." required>
+
+          <label for="user-email">Email (must match Auth user)</label>
+          <input type="email" id="user-email" placeholder="user@w3hub.berlin" required>
+
           <label for="user-role">Role</label>
-          <select id="user-role">
+          <select id="user-role" required>
             <option value="runner">Runner</option>
             <option value="admin">Admin</option>
           </select>
+
+          <button type="submit" class="btn-primary">Add User Mapping</button>
+          <p id="user-status" class="status-text"></p>
+        </form>
+      </section>
+
+      <hr class="divider">
+
+      <!-- USER LIST -->
+      <section class="analytics-section">
+        <h2>Existing Users</h2>
+        <p class="page-description">
+          Users listed here can log in. Deleting a mapping will block their access (you may also remove them from Supabase Auth manually).
+        </p>
+
+        <div class="table-wrapper">
+          <table class="history-table">
+            <thead>
+            <tr>
+              <th>Email</th>
+              <th>Role</th>
+              <th>User ID (UUID)</th>
+              <th style="width:130px;">Actions</th>
+            </tr>
+            </thead>
+            <tbody id="users-table-body"></tbody>
+          </table>
         </div>
-        <button type="submit" class="save-btn">Save / Update</button>
-      </form>
-      <p id="user-add-status"></p>
-    </section>
+      </section>
 
-    <hr style="border:none; border-top:1px solid #2a2d35; margin:16px 0;">
-
-    <section>
-      <h2 style="font-size:16px; color:#b8ffb5;">Existing users</h2>
-      <div style="overflow-x:auto;">
-        <table id="users-table" class="dark-table">
-          <thead>
-          <tr>
-            <th>Email</th>
-            <th>Role</th>
-            <th>Actions</th>
-          </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <p id="users-status"></p>
-    </section>
+    </div>
   </main>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-  const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
-  const SUPABASE_ANON_KEY =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
-
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-</script>
-<script defer src="auth.js"></script>
+<!-- User management logic -->
 <script defer src="admin_users.js"></script>
+
 </body>
 </html>
+
 
