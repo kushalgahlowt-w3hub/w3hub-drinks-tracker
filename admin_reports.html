@@ -1,368 +1,141 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>w3.hub · Admin Analytics Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>w3.hub – Admin Analytics</title>
 
-  <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable"></script>
+    <!-- Shared styles (same as Runner / Dashboard) -->
+    <link rel="stylesheet" href="style.css">
 
-  <style>
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
-      "Segoe UI", sans-serif;
-      background: #050609;
-      color: #e9e9e9;
-    }
+    <!-- Chart + PDF libs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable"></script>
 
-    .app-shell {
-      display: flex;
-      min-height: 100vh;
-      background: radial-gradient(circle at top, #181b25 0, #0e0f14 55%, #050609 100%);
-    }
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-    .sidebar {
-      width: 220px;
-      background: #070810;
-      border-right: 1px solid #22242d;
-      padding: 16px 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .sidebar-logo {
-      display: flex;
-      align-items: baseline;
-      gap: 6px;
-      margin-bottom: 8px;
-    }
-
-    .sidebar-logo-w3 {
-      color: #4ccbff;
-      font-weight: 500;
-      border: 1px solid rgba(76,203,255,0.6);
-      border-radius: 999px;
-      padding: 2px 8px 4px;
-      text-shadow: 0 0 6px rgba(76,203,255,0.7);
-      font-size: 16px;
-    }
-
-    .sidebar-logo-dot {
-      color: #4ccbff;
-      font-size: 18px;
-      text-shadow: 0 0 6px rgba(76,203,255,0.7);
-    }
-
-    .sidebar-logo-hub {
-      color: #b8ffb5;
-      font-weight: 700;
-      font-size: 18px;
-      text-shadow: 0 0 8px rgba(184,255,181,0.7);
-    }
-
-    .sidebar-tagline {
-      font-size: 11px;
-      color: #8c8f94;
-      margin-top: 4px;
-    }
-
-    .nav-section-title {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: #5f6470;
-      margin: 14px 0 6px;
-    }
-
-    .nav-links {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .nav-link {
-      font-size: 13px;
-      color: #c3c6cf;
-      text-decoration: none;
-      padding: 7px 8px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      border: 1px solid transparent;
-    }
-
-    .nav-link:hover {
-      background: rgba(255,255,255,0.04);
-      border-color: #22242d;
-    }
-
-    .nav-link-active {
-      background: linear-gradient(90deg, rgba(76,203,255,0.18), rgba(184,255,181,0.12));
-      border-color: #2f93ff;
-      color: #ffffff;
-    }
-
-    .sidebar-footer {
-      margin-top: auto;
-      font-size: 11px;
-      color: #6d717b;
-    }
-
-    .logout-btn {
-      width: 100%;
-      margin-top: 8px;
-      padding: 7px 10px;
-      border-radius: 8px;
-      border: 1px solid #2a2d35;
-      background: none;
-      color: #c3c6cf;
-      font-size: 12px;
-      cursor: pointer;
-    }
-
-    .logout-btn:hover {
-      background: rgba(255,255,255,0.04);
-    }
-
-    .main-content {
-      flex: 1;
-      padding: 18px 22px 32px;
-    }
-
-    .page-title {
-      font-size: 24px;
-      font-weight: 650;
-      margin: 4px 0;
-    }
-
-    .page-subtitle {
-      font-size: 13px;
-      color: #8c8f94;
-      margin-bottom: 16px;
-    }
-
-    hr {
-      border: none;
-      border-top: 1px solid #2a2d35;
-      margin: 16px 0;
-    }
-
-    h2 {
-      margin: 0;
-      font-size: 17px;
-    }
-
-    h3 {
-      margin: 16px 0 8px;
-      font-size: 15px;
-    }
-
-    .btn-primary {
-      padding: 8px 14px;
-      border-radius: 8px;
-      border: none;
-      background: #4ccbff;
-      color: #050609;
-      font-weight: 600;
-      cursor: pointer;
-      font-size: 13px;
-    }
-
-    .btn-secondary {
-      padding: 8px 14px;
-      border-radius: 8px;
-      border: none;
-      background: #b8ffb5;
-      color: #050609;
-      font-weight: 600;
-      cursor: pointer;
-      font-size: 13px;
-    }
-
-    .chip-empty {
-      font-size: 12px;
-      color: #8c8f94;
-      margin-top: 4px;
-    }
-
-    .dark-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-      margin-top: 4px;
-    }
-
-    .dark-table th,
-    .dark-table td {
-      border: 1px solid #2a2d35;
-      padding: 6px 8px;
-    }
-
-    .dark-table th {
-      background: #11131b;
-      text-align: left;
-    }
-
-    .filter-row {
-      margin-bottom: 12px;
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .filter-dropdown,
-    .filter-input {
-      padding: 6px 8px;
-      border-radius: 6px;
-      border: 1px solid #2a2d35;
-      background: #0f1117;
-      color: #e9e9e9;
-      font-size: 12px;
-    }
-  </style>
+    <!-- Auth (route protection + logoutUser) -->
+    <script defer src="auth.js"></script>
 </head>
 
-<body data-role="admin">
-<div class="app-shell">
-  <!-- SIDEBAR -->
-  <aside class="sidebar">
-    <div>
-      <div class="sidebar-logo">
-        <span class="sidebar-logo-w3">w3</span>
-        <span class="sidebar-logo-dot">.</span>
-        <span class="sidebar-logo-hub">hub</span>
-      </div>
-      <div class="sidebar-tagline">Drinks Tracker · Internal tool</div>
-    </div>
+<body>
+<div class="layout">
 
-    <div>
-      <div class="nav-section-title">Admin</div>
-      <nav class="nav-links">
-        <a href="dashboard.html" class="nav-link">Setup · Events / Floors</a>
-        <a href="admin_reports.html" class="nav-link nav-link-active">Analytics Dashboard</a>
-        <a href="runner.html" class="nav-link">Runner Mode</a>
-        <a href="admin_users.html" class="nav-link">User Management</a>
-      </nav>
-    </div>
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <span class="logo-icon">w3</span><span class="logo-dot">.</span><span class="logo-text">hub</span>
+        </div>
+        <div class="sidebar-subtitle">Drinks Tracker • Internal tool</div>
 
-    <div class="sidebar-footer">
-      Property of w3.hub<br>Internal use only
-      <button class="logout-btn" onclick="logoutUser()">Logout</button>
-    </div>
-  </aside>
+        <nav class="sidebar-nav">
+            <a href="dashboard.html">Setup · Events / Floors</a>
+            <a href="admin_reports.html" class="active">Analytics Dashboard</a>
+            <a href="runner.html">Runner Mode</a>
+            <a href="admin_users.html">User Management</a>
+        </nav>
 
-  <!-- MAIN CONTENT -->
-  <main class="main-content">
-    <h1 class="page-title">Admin Analytics Dashboard</h1>
-    <p class="page-subtitle">Filter events, view consumption data, export reports.</p>
+        <div class="sidebar-footer">
+            <p>Property of w3.hub<br>Internal use only</p>
+            <button onclick="logoutUser()" class="logout-btn">Logout</button>
+        </div>
+    </aside>
 
-    <hr>
+    <!-- MAIN CONTENT -->
+    <main class="content">
+        <div class="page-card">
 
-    <!-- MULTI-EVENT FILTER -->
-    <section>
-      <h2 style="color:#b8ffb5;">Select Events</h2>
-      <div id="event-checkboxes" style="margin-top:10px;"></div>
-      <p class="chip-empty" id="no-events-message" style="display:none;">No events found. Add events on the Setup page.</p>
+            <h1>Admin Analytics Dashboard</h1>
+            <p class="page-description">
+                Select events to see drink consumption, fridge activity, and detailed logs.
+            </p>
 
-      <button id="apply-event-filter" class="btn-primary" style="margin-top:10px;">
-        Apply Selection
-      </button>
-    </section>
+            <!-- SUPABASE CLIENT (needed for auth.js & admin_reports.js) -->
+            <script>
+                const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
+                const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
+                const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            </script>
 
-    <hr>
+            <!-- EVENT FILTER -->
+            <section class="analytics-section">
+                <h2>1. Select Events</h2>
+                <div id="event-checkboxes" class="event-checkboxes"></div>
+                <p id="events-status" class="status-text"></p>
+                <button id="apply-event-filter" class="btn-primary" style="margin-top:10px;">
+                    Apply Selection
+                </button>
+            </section>
 
-    <!-- CHARTS -->
-    <section>
-      <h2 style="color:#b8ffb5;">Analytics</h2>
+            <hr class="divider">
 
-      <div style="height:260px; margin:16px 0;">
-        <canvas id="chart-time-series"></canvas>
-      </div>
+            <!-- CHARTS -->
+            <section class="analytics-section">
+                <h2>2. Charts</h2>
+                <p class="page-description" id="charts-empty-message">
+                    No data yet. Select at least one event with fridge logs.
+                </p>
 
-      <div style="height:260px; margin:16px 0;">
-        <canvas id="chart-drink-breakdown"></canvas>
-      </div>
+                <div class="chart-grid">
+                    <div class="chart-card">
+                        <h3>By Drink Type</h3>
+                        <canvas id="drink-pie-chart"></canvas>
+                    </div>
 
-      <div style="height:260px; margin:16px 0;">
-        <canvas id="chart-fridge-breakdown"></canvas>
-      </div>
+                    <div class="chart-card">
+                        <h3>By Fridge</h3>
+                        <canvas id="fridge-bar-chart"></canvas>
+                    </div>
 
-      <h3 style="color:#b8ffb5;">Restock Heatmap</h3>
-      <div style="overflow-x:auto;">
-        <table id="heatmap-table" class="dark-table"></table>
-      </div>
-    </section>
+                    <div class="chart-card">
+                        <h3>Over Time</h3>
+                        <canvas id="date-line-chart"></canvas>
+                    </div>
+                </div>
+            </section>
 
-    <hr>
+            <hr class="divider">
 
-    <!-- DRILLDOWN TABLE -->
-    <section id="drilldown-section">
-      <h2 style="color:#b8ffb5;">Detailed Log</h2>
+            <!-- DRILLDOWN -->
+            <section class="analytics-section" id="drilldown-section">
+                <h2>3. Detailed Log</h2>
+                <p class="page-description">
+                    All log entries (start, restock, end) for the selected events.
+                </p>
 
-      <div class="filter-row">
-        <select id="filter-fridge" class="filter-dropdown">
-          <option value="">All Fridges</option>
-        </select>
+                <div class="drilldown-actions">
+                    <button id="export-csv-btn" class="btn-secondary">Export CSV</button>
+                    <button id="download-pdf-btn" class="btn-secondary">Download PDF</button>
+                </div>
 
-        <select id="filter-drink" class="filter-dropdown">
-          <option value="">All Drinks</option>
-        </select>
+                <div class="table-wrapper">
+                    <table class="history-table" id="drilldown-table">
+                        <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Event</th>
+                            <th>Floor</th>
+                            <th>Fridge</th>
+                            <th>Drink</th>
+                            <th>Action</th>
+                            <th>Amount</th>
+                        </tr>
+                        </thead>
+                        <tbody id="drilldown-body"></tbody>
+                    </table>
+                </div>
+            </section>
 
-        <select id="filter-action" class="filter-dropdown">
-          <option value="">All Actions</option>
-          <option value="start">Start</option>
-          <option value="restock">Restock</option>
-          <option value="end">End</option>
-        </select>
-
-        <input id="filter-search" class="filter-input" placeholder="Search text…">
-      </div>
-
-      <div style="overflow-x:auto;">
-        <table id="drilldown-table" class="dark-table">
-          <thead>
-          <tr>
-            <th data-sort="created_at">Time</th>
-            <th data-sort="fridge_name">Fridge</th>
-            <th data-sort="drink_name">Drink</th>
-            <th data-sort="action_type">Action</th>
-            <th data-sort="amount">Amount</th>
-          </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
-
-    <hr>
-
-    <button id="export-csv-btn" class="btn-primary">
-      Export CSV
-    </button>
-
-    <button id="download-pdf-btn" class="btn-secondary" style="margin-left:10px;">
-      Download Event PDF
-    </button>
-  </main>
+        </div>
+    </main>
 </div>
 
-<!-- Supabase + Auth + Page JS -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-  const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
-  const SUPABASE_ANON_KEY =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
-
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-</script>
-<script defer src="auth.js"></script>
+<!-- Analytics Logic -->
 <script defer src="admin_reports.js"></script>
+
 </body>
 </html>
+
 
