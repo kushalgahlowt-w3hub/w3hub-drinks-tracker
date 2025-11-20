@@ -1,22 +1,38 @@
-// admin_reports.js
-// Uses global `supabase` created in admin_reports.html
+/* -------------------------------------------------------
+   w3.hub Admin Analytics – FULL REPLACEMENT FILE
+   Features:
+   ✔ Accurate consumption (start + restock – end)
+   ✔ Multi-filter (drink + fridge + date)
+   ✔ Clickable charts → filtered drilldown
+   ✔ Hover highlighting
+   ✔ Smooth auto-scroll
+   ✔ Clear Filter button
+-------------------------------------------------------- */
 
+// Lookup tables
 let eventsById = {};
 let floorsById = {};
 let fridgesById = {};
 let drinksById = {};
 
+// Chart instances
 let drinkPieChart = null;
 let fridgeBarChart = null;
 let dateLineChart = null;
 
+// Global data
 let currentLogs = [];
+let activeFilters = {
+  drink: null,
+  fridge: null,
+  date: null
+};
 
 document.addEventListener("DOMContentLoaded", () => {
   initAnalytics().catch(err => {
-    console.error("Error initialising analytics:", err);
-    const s = document.getElementById("events-status");
-    if (s) s.textContent = "Error initialising analytics.";
+    console.error("Initialization error:", err);
+    document.getElementById("events-status").textContent =
+      "Error loading analytics.";
   });
 });
 
@@ -24,67 +40,48 @@ async function initAnalytics() {
   await loadLookups();
   buildEventCheckboxes();
 
-  const applyBtn = document.getElementById("apply-event-filter");
-  if (applyBtn) {
-    applyBtn.addEventListener("click", refreshAnalytics);
-  }
+  document
+    .getElementById("apply-event-filter")
+    .addEventListener("click", refreshAnalytics);
 
-  const csvBtn = document.getElementById("export-csv-btn");
-  if (csvBtn) {
-    csvBtn.addEventListener("click", exportCsv);
-  }
+  document
+    .getElementById("export-csv-btn")
+    .addEventListener("click", exportCsv);
 
-  const pdfBtn = document.getElementById("download-pdf-btn");
-  if (pdfBtn) {
-    pdfBtn.addEventListener("click", downloadPdf);
-  }
+  document
+    .getElementById("download-pdf-btn")
+    .addEventListener("click", downloadPdf);
+
+  addClearFilterPill();
 }
 
-/* -----------------------------
-   LOOKUPS
------------------------------- */
-
+/* -------------------------------------------------------
+   Load lookup tables
+-------------------------------------------------------- */
 async function loadLookups() {
-  const [eventsRes, floorsRes, fridgesRes, drinksRes] = await Promise.all([
+  const [events, floors, fridges, drinks] = await Promise.all([
     supabase.from("events").select("*"),
     supabase.from("floors").select("*"),
     supabase.from("fridges").select("*"),
     supabase.from("drink_types").select("*")
   ]);
 
-  if (eventsRes.error) console.error("Error loading events:", eventsRes.error);
-  if (floorsRes.error) console.error("Error loading floors:", floorsRes.error);
-  if (fridgesRes.error) console.error("Error loading fridges:", fridgesRes.error);
-  if (drinksRes.error) console.error("Error loading drink types:", drinksRes.error);
-
-  (eventsRes.data || []).forEach(e => (eventsById[e.id] = e));
-  (floorsRes.data || []).forEach(f => (floorsById[f.id] = f));
-  (fridgesRes.data || []).forEach(fr => (fridgesById[fr.id] = fr));
-  (drinksRes.data || []).forEach(d => (drinksById[d.id] = d));
+  events.data?.forEach(e => (eventsById[e.id] = e));
+  floors.data?.forEach(f => (floorsById[f.id] = f));
+  fridges.data?.forEach(fr => (fridgesById[fr.id] = fr));
+  drinks.data?.forEach(d => (drinksById[d.id] = d));
 }
 
-/* -----------------------------
-   EVENT CHECKBOXES
------------------------------- */
-
+/* -------------------------------------------------------
+   Event Checkboxes
+-------------------------------------------------------- */
 function buildEventCheckboxes() {
   const container = document.getElementById("event-checkboxes");
-  const status = document.getElementById("events-status");
-  if (!container) return;
-
   container.innerHTML = "";
 
-  const events = Object.values(eventsById).sort((a, b) => {
-    const da = a.event_date || a.date || "";
-    const db = b.event_date || b.date || "";
-    return da.localeCompare(db);
-  });
-
-  if (events.length === 0) {
-    container.textContent = "No events found. Add events on the Setup page.";
-    if (status) status.textContent = "";
-    return;
-  }
+  const events = Object.values(eventsById).sort((a, b) =>
+    (a.event_date || "").localeCompare(b.event_date || "")
+  );
 
   events.forEach(ev => {
     const label = document.createElement("label");
@@ -95,248 +92,267 @@ function buildEventCheckboxes() {
     cb.value = ev.id;
     cb.checked = true;
 
-    const dateLabel = ev.event_date || ev.date || "";
-    const text = document.createTextNode(
-      ` ${ev.name}${dateLabel ? " (" + dateLabel + ")" : ""}`
+    label.appendChild(cb);
+    label.appendChild(
+      document.createTextNode(
+        ` ${ev.name}${ev.event_date ? " (" + ev.event_date + ")" : ""}`
+      )
     );
 
-    label.appendChild(cb);
-    label.appendChild(text);
     container.appendChild(label);
   });
-
-  if (status) status.textContent = "All events selected by default.";
 }
 
 function getSelectedEventIds() {
-  const container = document.getElementById("event-checkboxes");
-  if (!container) return [];
-  const cbs = container.querySelectorAll("input[type='checkbox']");
-  const ids = [];
-  cbs.forEach(cb => {
-    if (cb.checked) ids.push(cb.value);
-  });
-  return ids;
+  return [...document.querySelectorAll("#event-checkboxes input:checked")].map(
+    cb => cb.value
+  );
 }
 
-/* -----------------------------
+/* -------------------------------------------------------
    MAIN REFRESH
------------------------------- */
-
+-------------------------------------------------------- */
 async function refreshAnalytics() {
-  const status = document.getElementById("events-status");
-  const chartsEmpty = document.getElementById("charts-empty-message");
+  resetFilters();
   const tbody = document.getElementById("drilldown-body");
+  tbody.innerHTML = "";
 
-  if (tbody) tbody.innerHTML = "";
-
-  const selectedIds = getSelectedEventIds();
-  if (selectedIds.length === 0) {
-    if (status) status.textContent = "Please select at least one event.";
+  const selected = getSelectedEventIds();
+  if (selected.length === 0) {
     clearCharts();
-    if (chartsEmpty) chartsEmpty.style.display = "block";
+    document.getElementById("charts-empty-message").style.display = "block";
     return;
   }
-
-  if (status) status.textContent = "Loading data…";
 
   const { data, error } = await supabase
     .from("fridge_log_entries")
     .select("*")
-    .in("event_id", selectedIds)
-    .order("created_at", { ascending: true });
+    .in("event_id", selected);
 
-  if (error) {
-    console.error("Error loading fridge_log_entries:", error);
-    if (status) status.textContent = "Error loading data.";
+  if (error || !data) {
     clearCharts();
-    if (chartsEmpty) chartsEmpty.style.display = "block";
-    return;
-  }
-
-  if (!data || data.length === 0) {
-    if (status) status.textContent = "No logs for the selected events.";
-    clearCharts();
-    if (chartsEmpty) chartsEmpty.style.display = "block";
     return;
   }
 
   currentLogs = data.map(row => {
-    const event = eventsById[row.event_id] || null;
-    const fridge = fridgesById[row.fridge_id] || null;
-    const drink = drinksById[row.drink_type_id] || null;
-    const floor =
-      fridge && floorsById[fridge.floor_id] ? floorsById[fridge.floor_id] : null;
+    const event = eventsById[row.event_id];
+    const fridge = fridgesById[row.fridge_id];
+    const drink = drinksById[row.drink_type_id];
+    const floor = fridge ? floorsById[fridge.floor_id] : null;
 
-    return {
-      ...row,
-      event,
-      fridge,
-      drink,
-      floor
-    };
+    return { ...row, event, fridge, drink, floor };
   });
-
-  if (status) status.textContent = `Loaded ${currentLogs.length} log entries.`;
-  if (chartsEmpty) chartsEmpty.style.display = "none";
 
   buildCharts(currentLogs);
   fillDrilldownTable(currentLogs);
-
-  const drilldownSection = document.getElementById("drilldown-section");
-  if (drilldownSection) {
-    drilldownSection.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
+  autoScrollToSection("drilldown-section");
 }
 
-/* -----------------------------
+/* -------------------------------------------------------
    CHARTS
------------------------------- */
-
+-------------------------------------------------------- */
 function clearCharts() {
-  if (drinkPieChart) {
-    drinkPieChart.destroy();
-    drinkPieChart = null;
-  }
-  if (fridgeBarChart) {
-    fridgeBarChart.destroy();
-    fridgeBarChart = null;
-  }
-  if (dateLineChart) {
-    dateLineChart.destroy();
-    dateLineChart = null;
-  }
+  drinkPieChart?.destroy();
+  fridgeBarChart?.destroy();
+  dateLineChart?.destroy();
+
+  drinkPieChart = fridgeBarChart = dateLineChart = null;
 }
 
 function buildCharts(logs) {
   clearCharts();
 
+  // Calculate real consumption
   const usageByDrink = {};
   const usageByFridge = {};
   const usageByDate = {};
 
   logs.forEach(log => {
-    const sign = log.action_type === "end" ? -1 : 1;
-    const value = (log.amount || 0) * sign;
+    const isStart = log.action_type === "start";
+    const isRestock = log.action_type === "restock";
+    const isEnd = log.action_type === "end";
 
-    const drinkKey = log.drink ? log.drink.name : "Unknown";
-    usageByDrink[drinkKey] = (usageByDrink[drinkKey] || 0) + value;
+    const delta = isStart || isRestock ? log.amount : -log.amount;
 
-    const fridgeKey = log.fridge ? log.fridge.name : "Unknown";
-    usageByFridge[fridgeKey] = (usageByFridge[fridgeKey] || 0) + value;
+    const drink = log.drink?.name || "Unknown";
+    const fridge = log.fridge?.name || "Unknown";
+    const date = (log.created_at || "").slice(0, 10);
 
-    const dateKey = (log.created_at || "").slice(0, 10);
-    usageByDate[dateKey] = (usageByDate[dateKey] || 0) + value;
+    usageByDrink[drink] = (usageByDrink[drink] || 0) + delta;
+    usageByFridge[fridge] = (usageByFridge[fridge] || 0) + delta;
+    usageByDate[date] = (usageByDate[date] || 0) + delta;
   });
 
-  // PIE – by drink
-  const drinkCanvas = document.getElementById("drink-pie-chart");
-  if (drinkCanvas) {
-    const ctx = drinkCanvas.getContext("2d");
-    const labels = Object.keys(usageByDrink);
-    const data = labels.map(k => Math.max(usageByDrink[k], 0));
+  buildDrinkPieChart(usageByDrink);
+  buildFridgeBarChart(usageByFridge);
+  buildDateLineChart(usageByDate);
 
-    drinkPieChart = new Chart(ctx, {
-      type: "pie",
-      data: {
-        labels,
-        datasets: [
-          {
-            data
-          }
-        ]
-      },
-      options: {
-        plugins: {
-          legend: { position: "bottom" }
-        }
-      }
-    });
-  }
-
-  // BAR – by fridge
-  const fridgeCanvas = document.getElementById("fridge-bar-chart");
-  if (fridgeCanvas) {
-    const ctx = fridgeCanvas.getContext("2d");
-    const labels = Object.keys(usageByFridge);
-    const data = labels.map(k => usageByFridge[k]);
-
-    fridgeBarChart = new Chart(ctx, {
-      type: "bar",
-      data: {
-        labels,
-        datasets: [
-          {
-            data
-          }
-        ]
-      },
-      options: {
-        indexAxis: "y",
-        plugins: {
-          legend: { display: false }
-        }
-      }
-    });
-  }
-
-  // LINE – over time
-  const dateCanvas = document.getElementById("date-line-chart");
-  if (dateCanvas) {
-    const ctx = dateCanvas.getContext("2d");
-    const labels = Object.keys(usageByDate).sort();
-    const data = labels.map(k => usageByDate[k]);
-
-    dateLineChart = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels,
-        datasets: [
-          {
-            data,
-            fill: false
-          }
-        ]
-      },
-      options: {
-        plugins: {
-          legend: { display: false }
-        }
-      }
-    });
-  }
+  enableChartClickHandlers();
 }
 
-/* -----------------------------
-   DRILLDOWN TABLE
------------------------------- */
+function buildDrinkPieChart(obj) {
+  const ctx = document.getElementById("drink-pie-chart")?.getContext("2d");
+  if (!ctx) return;
 
+  drinkPieChart = new Chart(ctx, {
+    type: "pie",
+    data: {
+      labels: Object.keys(obj),
+      datasets: [{ data: Object.values(obj) }]
+    },
+    options: {
+      onHover: hoverHandler("drink"),
+      onClick: clickHandler("drink")
+    }
+  });
+}
+
+function buildFridgeBarChart(obj) {
+  const ctx = document.getElementById("fridge-bar-chart")?.getContext("2d");
+  if (!ctx) return;
+
+  fridgeBarChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: Object.keys(obj),
+      datasets: [{ data: Object.values(obj) }]
+    },
+    options: {
+      indexAxis: "y",
+      onHover: hoverHandler("fridge"),
+      onClick: clickHandler("fridge")
+    }
+  });
+}
+
+function buildDateLineChart(obj) {
+  const ctx = document.getElementById("date-line-chart")?.getContext("2d");
+  if (!ctx) return;
+
+  dateLineChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: Object.keys(obj).sort(),
+      datasets: [
+        {
+          data: Object.values(obj),
+          fill: false
+        }
+      ]
+    },
+    options: {
+      onHover: hoverHandler("date"),
+      onClick: clickHandler("date")
+    }
+  });
+}
+
+/* -------------------------------------------------------
+   HANDLERS – MULTI-FILTER + SCROLL
+-------------------------------------------------------- */
+function hoverHandler(type) {
+  return (e, elements) => {
+    document.body.style.cursor = elements.length ? "pointer" : "default";
+  };
+}
+
+function clickHandler(type) {
+  return (e, elements) => {
+    if (!elements.length) return;
+
+    const idx = elements[0].index;
+    let value = null;
+
+    if (type === "drink") value = drinkPieChart.data.labels[idx];
+    if (type === "fridge") value = fridgeBarChart.data.labels[idx];
+    if (type === "date") value = dateLineChart.data.labels[idx];
+
+    activeFilters[type] = value;
+
+    applyFilters();
+    autoScrollToSection("drilldown-section");
+    updateFilterPill();
+  };
+}
+
+function applyFilters() {
+  const filtered = currentLogs.filter(log => {
+    const byDrink =
+      !activeFilters.drink || log.drink?.name === activeFilters.drink;
+
+    const byFridge =
+      !activeFilters.fridge || log.fridge?.name === activeFilters.fridge;
+
+    const byDate =
+      !activeFilters.date ||
+      (log.created_at || "").startsWith(activeFilters.date);
+
+    return byDrink && byFridge && byDate;
+  });
+
+  fillDrilldownTable(filtered);
+}
+
+function resetFilters() {
+  activeFilters = { drink: null, fridge: null, date: null };
+  updateFilterPill();
+}
+
+/* -------------------------------------------------------
+   UI – FILTER PILL
+-------------------------------------------------------- */
+function addClearFilterPill() {
+  const pill = document.createElement("div");
+  pill.id = "filter-pill";
+  pill.style.display = "none";
+  pill.style.margin = "10px 0";
+  pill.style.padding = "8px 14px";
+  pill.style.background = "#1f242e";
+  pill.style.borderRadius = "50px";
+  pill.style.fontSize = "13px";
+  pill.style.cursor = "pointer";
+  pill.style.width = "fit-content";
+
+  pill.textContent = "Clear filters ✕";
+
+  pill.onclick = () => {
+    resetFilters();
+    fillDrilldownTable(currentLogs);
+    pill.style.display = "none";
+  };
+
+  const section = document.getElementById("drilldown-section");
+  section.prepend(pill);
+}
+
+function updateFilterPill() {
+  const pill = document.getElementById("filter-pill");
+  const active =
+    activeFilters.drink || activeFilters.fridge || activeFilters.date;
+
+  pill.style.display = active ? "inline-block" : "none";
+}
+
+/* -------------------------------------------------------
+   DRILLDOWN TABLE
+-------------------------------------------------------- */
 function fillDrilldownTable(logs) {
   const tbody = document.getElementById("drilldown-body");
-  if (!tbody) return;
-
   tbody.innerHTML = "";
 
   logs.forEach(log => {
     const tr = document.createElement("tr");
 
     const d = new Date(log.created_at);
-    const timeStr = isNaN(d.getTime())
-      ? log.created_at
-      : d.toLocaleString();
+    const t = !isNaN(d) ? d.toLocaleString() : log.created_at;
 
-    const eventName = log.event ? log.event.name : "";
-    const floorName = log.floor ? log.floor.name : "";
-    const fridgeName = log.fridge ? log.fridge.name : "";
-    const drinkName = log.drink ? log.drink.name : "";
-
-    addCell(tr, timeStr);
-    addCell(tr, eventName);
-    addCell(tr, floorName);
-    addCell(tr, fridgeName);
-    addCell(tr, drinkName);
-    addCell(tr, log.action_type || "");
-    addCell(tr, log.amount != null ? String(log.amount) : "");
+    addCell(tr, t);
+    addCell(tr, log.event?.name || "");
+    addCell(tr, log.floor?.name || "");
+    addCell(tr, log.fridge?.name || "");
+    addCell(tr, log.drink?.name || "");
+    addCell(tr, log.action_type);
+    addCell(tr, log.amount);
 
     tbody.appendChild(tr);
   });
@@ -348,15 +364,19 @@ function addCell(tr, text) {
   tr.appendChild(td);
 }
 
-/* -----------------------------
-   EXPORT: CSV
------------------------------- */
+/* -------------------------------------------------------
+   UTIL – SCROLL TO ELEMENT
+-------------------------------------------------------- */
+function autoScrollToSection(id) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+}
 
+/* -------------------------------------------------------
+   EXPORTERS
+-------------------------------------------------------- */
 function exportCsv() {
-  if (!currentLogs || currentLogs.length === 0) {
-    alert("No data to export.");
-    return;
-  }
+  if (!currentLogs.length) return alert("No data.");
 
   const header = [
     "time",
@@ -370,93 +390,60 @@ function exportCsv() {
 
   const rows = currentLogs.map(log => {
     const d = new Date(log.created_at);
-    const timeStr = isNaN(d.getTime())
-      ? log.created_at
-      : d.toISOString();
-
-    const eventName = log.event ? log.event.name : "";
-    const floorName = log.floor ? log.floor.name : "";
-    const fridgeName = log.fridge ? log.fridge.name : "";
-    const drinkName = log.drink ? log.drink.name : "";
+    const t = !isNaN(d) ? d.toISOString() : log.created_at;
 
     return [
-      timeStr,
-      eventName,
-      floorName,
-      fridgeName,
-      drinkName,
-      log.action_type || "",
-      log.amount != null ? String(log.amount) : ""
+      t,
+      log.event?.name || "",
+      log.floor?.name || "",
+      log.fridge?.name || "",
+      log.drink?.name || "",
+      log.action_type,
+      log.amount
     ];
   });
 
   const csv = [header.join(","), ...rows.map(r => r.join(","))].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement("a");
   a.href = url;
   a.download = "w3hub_drinks_analytics.csv";
-  document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }
 
-/* -----------------------------
-   EXPORT: PDF
------------------------------- */
-
 function downloadPdf() {
-  if (!currentLogs || currentLogs.length === 0) {
-    alert("No data to export.");
-    return;
-  }
+  if (!currentLogs.length) return alert("No data.");
 
-  // jsPDF is exposed via window.jspdf.jsPDF for the UMD build
-  if (!window.jspdf || !window.jspdf.jsPDF) {
-    alert("PDF library not loaded.");
-    return;
-  }
-
-  const doc = new window.jspdf.jsPDF("p", "mm", "a4");
-
+  const doc = new window.jspdf.jsPDF();
   doc.setFontSize(14);
   doc.text("w3.hub Drinks Analytics", 14, 16);
 
   const rows = currentLogs.map(log => {
     const d = new Date(log.created_at);
-    const timeStr = isNaN(d.getTime())
-      ? log.created_at
-      : d.toLocaleString();
-
-    const eventName = log.event ? log.event.name : "";
-    const floorName = log.floor ? log.floor.name : "";
-    const fridgeName = log.fridge ? log.fridge.name : "";
-    const drinkName = log.drink ? log.drink.name : "";
+    const t = !isNaN(d) ? d.toLocaleString() : log.created_at;
 
     return [
-      timeStr,
-      eventName,
-      floorName,
-      fridgeName,
-      drinkName,
-      log.action_type || "",
-      log.amount != null ? String(log.amount) : ""
+      t,
+      log.event?.name || "",
+      log.floor?.name || "",
+      log.fridge?.name || "",
+      log.drink?.name || "",
+      log.action_type,
+      log.amount
     ];
   });
 
-  if (doc.autoTable) {
-    doc.autoTable({
-      startY: 22,
-      head: [["Time", "Event", "Floor", "Fridge", "Drink", "Action", "Amount"]],
-      body: rows,
-      styles: { fontSize: 8 }
-    });
-  }
+  doc.autoTable({
+    startY: 22,
+    head: [["Time", "Event", "Floor", "Fridge", "Drink", "Action", "Amount"]],
+    body: rows
+  });
 
   doc.save("w3hub_drinks_analytics.pdf");
 }
+
 
 
 
