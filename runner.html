@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
     <title>w3.hub – Runner Mode</title>
 
     <!-- Styles -->
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style.css">
 
     <!-- Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -16,136 +16,143 @@
 </head>
 
 <body>
-    <div class="layout">
+<div class="layout">
 
-        <!-- SIDEBAR -->
-        <aside class="sidebar">
-            <div class="sidebar-logo">
-                <span class="logo-icon">w3</span>
-                <span class="logo-dot">.</span>
-                <span class="logo-text">hub</span>
-            </div>
-            <div class="sidebar-subtitle">Drinks Tracker • Internal tool</div>
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <span class="logo-icon">w3</span><span class="logo-dot">.</span><span class="logo-text">hub</span>
+        </div>
+        <div class="sidebar-subtitle">Drinks Tracker • Internal tool</div>
 
-            <nav class="sidebar-nav">
-                <a href="dashboard.html">Setup · Events / Floors</a>
-                <a href="admin_reports.html">Analytics Dashboard</a>
-                <a href="runner.html" class="active">Runner Mode</a>
-                <a href="admin_users.html">User Management</a>
-            </nav>
+        <nav class="sidebar-nav">
+            <a href="dashboard.html">Setup · Events / Floors</a>
+            <a href="admin_reports.html">Analytics Dashboard</a>
+            <a href="runner.html" class="active">Runner Mode</a>
+            <a href="admin_users.html">User Management</a>
+        </nav>
 
-            <div class="sidebar-footer">
-                <p>Property of w3.hub<br />Internal use only</p>
-                <button onclick="logoutUser()" class="logout-btn">Logout</button>
-            </div>
-        </aside>
+        <div class="sidebar-footer">
+            <p>Property of w3.hub<br>Internal use only</p>
+            <button onclick="logoutUser()" class="logout-btn">Logout</button>
+        </div>
+    </aside>
 
-        <!-- MAIN CONTENT -->
-        <main class="content">
-            <div class="page-card">
+    <!-- MAIN CONTENT -->
+    <main class="content">
+        <div class="page-card">
 
-                <h1>Runner: Update Counts</h1>
-                <p class="page-description">
-                    Start → Restock → End counts for each fridge.
-                </p>
+            <h1>Runner: Update Counts</h1>
+            <p class="page-description">
+                Start → Restock → End counts for each fridge.
+            </p>
 
-                <!-- RUNNER FORM -->
-                <form id="log-form" class="runner-form">
+            <!-- SUPABASE CLIENT INITIALIZATION (THIS WAS MISSING) -->
+            <script>
+                const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
+                const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
 
-                    <!-- EVENT -->
-                    <label for="event-select">Event</label>
-                    <select id="event-select" required></select>
+                const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            </script>
 
-                    <!-- FLOOR -->
-                    <label for="floor-select">Floor</label>
-                    <select id="floor-select" required></select>
+            <!-- RUNNER FORM -->
+            <form id="log-form" class="runner-form">
 
-                    <!-- FRIDGE -->
-                    <label for="fridge-select">Fridge</label>
-                    <select id="fridge-select" required></select>
+                <!-- EVENT -->
+                <label for="event-select">Event</label>
+                <select id="event-select" required></select>
 
-                    <!-- DRINK -->
-                    <label for="drink-select">Drink</label>
-                    <select id="drink-select" required></select>
+                <!-- FLOOR -->
+                <label for="floor-select">Floor</label>
+                <select id="floor-select" required></select>
 
-                    <!-- MODE SELECTOR -->
-                    <label>Action</label>
-                    <div class="mode-toggle">
-                        <label><input type="radio" name="mode" value="start" checked /> Start Count</label>
-                        <label><input type="radio" name="mode" value="restock" /> Restock</label>
-                        <label><input type="radio" name="mode" value="end" /> End Count</label>
-                    </div>
+                <!-- FRIDGE -->
+                <label for="fridge-select">Fridge</label>
+                <select id="fridge-select" required></select>
 
-                    <!-- START COUNT -->
-                    <div class="count-block" id="start-block">
-                        <label for="start-count">Start Count</label>
-                        <input type="number" id="start-count" min="0" />
-                    </div>
+                <!-- DRINK -->
+                <label for="drink-select">Drink</label>
+                <select id="drink-select" required></select>
 
-                    <!-- RESTOCK COUNT -->
-                    <div class="count-block" id="restock-block" style="display:none;">
-                        <label for="restock-count">Restock Amount</label>
-                        <input type="number" id="restock-count" min="0" />
-                    </div>
+                <!-- ACTION -->
+                <label>Action</label>
+                <div class="mode-toggle">
+                    <label><input type="radio" name="mode" value="start" checked> Start Count</label>
+                    <label><input type="radio" name="mode" value="restock"> Restock</label>
+                    <label><input type="radio" name="mode" value="end"> End Count</label>
+                </div>
 
-                    <!-- END COUNT -->
-                    <div class="count-block" id="end-block" style="display:none;">
-                        <label for="end-count">End Count</label>
-                        <input type="number" id="end-count" min="0" />
-                    </div>
+                <!-- START -->
+                <div class="count-block" id="start-block">
+                    <label for="start-count">Start Count</label>
+                    <input type="number" id="start-count" min="0">
+                </div>
 
-                    <!-- SUBMIT BUTTON -->
-                    <button type="submit" class="btn-primary">Submit</button>
+                <!-- RESTOCK -->
+                <div class="count-block" id="restock-block" style="display:none;">
+                    <label for="restock-count">Restock Amount</label>
+                    <input type="number" id="restock-count" min="0">
+                </div>
 
-                    <p id="log-status" class="status-text"></p>
-                </form>
+                <!-- END -->
+                <div class="count-block" id="end-block" style="display:none;">
+                    <label for="end-count">End Count</label>
+                    <input type="number" id="end-count" min="0">
+                </div>
 
-                <hr class="divider" />
+                <button type="submit" class="btn-primary">Submit</button>
 
-                <!-- HISTORY TABLE -->
-                <h2>Recent History</h2>
-                <p class="page-description">Last 10 updates for this event / fridge / drink.</p>
+                <p id="log-status" class="status-text"></p>
+            </form>
 
-                <table class="history-table">
-                    <thead>
-                        <tr>
-                            <th>Time</th>
-                            <th>Action</th>
-                            <th>Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody id="history-body"></tbody>
-                </table>
+            <hr class="divider">
 
-            </div>
-        </main>
-    </div>
+            <!-- HISTORY -->
+            <h2>Recent History</h2>
+            <p class="page-description">Last 10 updates for this event / fridge / drink.</p>
 
-    <!-- Runner Logic -->
-    <script defer src="runner.js"></script>
+            <table class="history-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Action</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody id="history-body"></tbody>
+            </table>
 
-    <!-- MODE SWITCHING (Show/Hide Input Fields) -->
-    <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            const radios = document.querySelectorAll("input[name='mode']");
-            const startBlock = document.getElementById("start-block");
-            const restockBlock = document.getElementById("restock-block");
-            const endBlock = document.getElementById("end-block");
+        </div>
+    </main>
 
-            function updateBlocks() {
-                const mode = document.querySelector("input[name='mode']:checked").value;
-                startBlock.style.display = mode === "start" ? "block" : "none";
-                restockBlock.style.display = mode === "restock" ? "block" : "none";
-                endBlock.style.display = mode === "end" ? "block" : "none";
-            }
+</div>
 
-            radios.forEach(r => r.addEventListener("change", updateBlocks));
-            updateBlocks();
-        });
-    </script>
+<!-- RUNNER LOGIC -->
+<script defer src="runner.js"></script>
+
+<!-- MODE BLOCK SWITCHING -->
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const radios = document.querySelectorAll("input[name='mode']");
+        const s = document.getElementById("start-block");
+        const r = document.getElementById("restock-block");
+        const e = document.getElementById("end-block");
+
+        function updateBlocks() {
+            const mode = document.querySelector("input[name='mode']:checked").value;
+            s.style.display = mode === "start" ? "block" : "none";
+            r.style.display = mode === "restock" ? "block" : "none";
+            e.style.display = mode === "end" ? "block" : "none";
+        }
+
+        radios.forEach(x => x.addEventListener("change", updateBlocks));
+        updateBlocks();
+    });
+</script>
 
 </body>
 </html>
+
 
 
 
