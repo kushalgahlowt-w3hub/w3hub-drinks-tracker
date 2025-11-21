@@ -1,126 +1,214 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>w3.hub – User Management</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>w3.hub – User Management</title>
 
-  <!-- Shared styles -->
-  <link rel="stylesheet" href="style.css">
+    <!-- Shared styles -->
+    <link rel="stylesheet" href="style.css" />
 
-  <!-- Supabase client -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <!-- Auth guard (protects admin pages) -->
-  <script defer src="auth.js"></script>
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- Auth + role protection -->
+    <script defer src="auth.js"></script>
 </head>
 
 <body>
 <div class="layout">
 
-  <!-- SIDEBAR -->
-  <aside class="sidebar">
-    <div class="sidebar-logo">
-      <span class="logo-icon">w3</span><span class="logo-dot">.</span><span class="logo-text">hub</span>
-    </div>
-    <div class="sidebar-subtitle">Drinks Tracker • Internal tool</div>
-
-    <nav class="sidebar-nav">
-      <a href="dashboard.html">Setup · Events / Floors</a>
-      <a href="admin_reports.html">Analytics Dashboard</a>
-      <a href="runner.html">Runner Mode</a>
-      <a href="admin_users.html" class="active">User Management</a>
-    </nav>
-
-    <div class="sidebar-footer">
-      <p>Property of w3.hub<br>Internal use only</p>
-      <button onclick="logoutUser()" class="logout-btn">Logout</button>
-    </div>
-  </aside>
-
-  <!-- MAIN CONTENT -->
-  <main class="content">
-    <div class="page-card">
-
-      <h1>User Management</h1>
-      <p class="page-description">
-        Link Supabase Auth users to roles (admin / runner). Only users listed here can access the app.
-      </p>
-
-      <!-- SUPABASE CLIENT INIT -->
-      <script>
-        const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
-        const SUPABASE_ANON_KEY =
-          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      </script>
-
-      <!-- HOW-TO SECTION -->
-      <section class="analytics-section">
-        <h2>How to add a new user</h2>
-        <ol style="font-size: 13px; color:#9ca0aa; padding-left: 18px;">
-          <li>In Supabase Dashboard → <strong>Authentication → Users</strong>, create a new user with their email.</li>
-          <li>Copy that user’s <strong>UUID</strong> (their <code>id</code> in the Users table).</li>
-          <li>Paste the UUID and email below, choose a role, and click <strong>Add User Mapping</strong>.</li>
-          <li>The user can then go to the login page and use <strong>“Forgot password?”</strong> to set a password.</li>
-        </ol>
-      </section>
-
-      <hr class="divider">
-
-      <!-- ADD USER FORM -->
-      <section class="analytics-section">
-        <h2>Add User Mapping</h2>
-
-        <form id="user-form" class="runner-form">
-          <label for="user-id">Auth user ID (UUID from Supabase Auth)</label>
-          <input type="text" id="user-id" placeholder="e.g. 9b3f2a8c-..." required>
-
-          <label for="user-email">Email (must match Auth user)</label>
-          <input type="email" id="user-email" placeholder="user@w3hub.berlin" required>
-
-          <label for="user-role">Role</label>
-          <select id="user-role" required>
-            <option value="runner">Runner</option>
-            <option value="admin">Admin</option>
-          </select>
-
-          <button type="submit" class="btn-primary">Add User Mapping</button>
-          <p id="user-status" class="status-text"></p>
-        </form>
-      </section>
-
-      <hr class="divider">
-
-      <!-- USER LIST -->
-      <section class="analytics-section">
-        <h2>Existing Users</h2>
-        <p class="page-description">
-          Users listed here can log in. Deleting a mapping will block their access (you may also remove them from Supabase Auth manually).
-        </p>
-
-        <div class="table-wrapper">
-          <table class="history-table">
-            <thead>
-            <tr>
-              <th>Email</th>
-              <th>Role</th>
-              <th>User ID (UUID)</th>
-              <th style="width:130px;">Actions</th>
-            </tr>
-            </thead>
-            <tbody id="users-table-body"></tbody>
-          </table>
+    <!-- SIDEBAR (ADMIN ONLY) -->
+    <aside class="sidebar" data-role="admin-only">
+        <div class="sidebar-logo">
+            <span class="logo-icon">w3</span><span class="logo-dot">.</span><span class="logo-text">hub</span>
         </div>
-      </section>
+        <div class="sidebar-subtitle">Drinks Tracker • Internal tool</div>
 
-    </div>
-  </main>
+        <nav class="sidebar-nav">
+            <a href="dashboard.html">Setup · Events / Floors</a>
+            <a href="runner.html">Runner Mode</a>
+            <a href="storage.html">Storage / Deliveries</a>
+            <a href="admin_reports.html">Analytics Dashboard</a>
+            <a href="admin_users.html" class="active">User Management</a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <p>Property of w3.hub<br />Internal use only</p>
+            <button onclick="logoutUser()" class="logout-btn">Logout</button>
+        </div>
+    </aside>
+
+    <!-- SIDEBAR (RUNNER ONLY) -->
+    <aside class="sidebar" data-role="runner-only" style="display:none;">
+        <div class="sidebar-logo">
+            <span class="logo-icon">w3</span><span class="logo-dot">.</span><span class="logo-text">hub</span>
+        </div>
+        <div class="sidebar-subtitle">Drinks Tracker • Internal tool</div>
+
+        <nav class="sidebar-nav">
+            <a href="runner.html">Runner Mode</a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <p>Property of w3.hub<br />Internal use only</p>
+            <button onclick="logoutUser()" class="logout-btn">Logout</button>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="content">
+        <div class="page-card">
+
+            <h1>User Management</h1>
+            <p class="page-description">
+                Create new Admin or Runner accounts. Password reset links are automatically sent by Supabase.
+            </p>
+
+            <!-- Supabase Client Init -->
+            <script>
+                const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
+                const SUPABASE_ANON_KEY =
+                    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
+
+                const supabase = window.supabase.createClient(
+                    SUPABASE_URL,
+                    SUPABASE_ANON_KEY
+                );
+            </script>
+
+            <!-- Add User Form -->
+            <section>
+                <h2>Create New User</h2>
+
+                <form id="create-user-form">
+                    <label for="new-email">Email</label>
+                    <input type="email" id="new-email" required />
+
+                    <label for="new-role">Role</label>
+                    <select id="new-role">
+                        <option value="runner">Runner</option>
+                        <option value="admin">Admin</option>
+                    </select>
+
+                    <button type="submit" class="btn-primary">Create User</button>
+                </form>
+
+                <p id="create-user-status" class="status-text"></p>
+            </section>
+
+            <hr class="divider" />
+
+            <!-- Users List -->
+            <section>
+                <h2>Existing Users</h2>
+                <p class="page-description">List of all registered Runner and Admin accounts.</p>
+
+                <div class="table-wrapper">
+                    <table class="history-table">
+                        <thead>
+                        <tr>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Created</th>
+                        </tr>
+                        </thead>
+                        <tbody id="users-table-body"></tbody>
+                    </table>
+                </div>
+
+                <p id="users-status" class="status-text"></p>
+            </section>
+
+        </div>
+    </main>
 </div>
 
-<!-- User management logic -->
-<script defer src="admin_users.js"></script>
+<!-- Admin Users Logic -->
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        loadUsers();
+
+        document.getElementById("create-user-form").addEventListener("submit", createUser);
+    });
+
+    async function createUser(e) {
+        e.preventDefault();
+
+        const email = document.getElementById("new-email").value.trim();
+        const role = document.getElementById("new-role").value.trim();
+        const status = document.getElementById("create-user-status");
+
+        status.textContent = "";
+        status.className = "status-text";
+
+        // 1. Create Supabase Auth user (sends password reset link)
+        const { data: signupData, error: signupErr } = await supabase.auth.admin.createUser({
+            email,
+            email_confirm: true
+        });
+
+        if (signupErr) {
+            console.error("Error creating auth user:", signupErr);
+            status.textContent = "❌ Error creating user.";
+            status.classList.add("error");
+            return;
+        }
+
+        const authUserId = signupData.user.id;
+
+        // 2. Insert into users table with role
+        const { error: userErr } = await supabase
+            .from("users")
+            .insert([{ email, role, auth_user_id: authUserId }]);
+
+        if (userErr) {
+            console.error("Error inserting user role:", userErr);
+            status.textContent = "❌ Error saving user role.";
+            status.classList.add("error");
+            return;
+        }
+
+        status.textContent = "✅ User created! Password email sent.";
+        status.classList.add("success");
+
+        document.getElementById("create-user-form").reset();
+        loadUsers();
+    }
+
+    async function loadUsers() {
+        const tbody = document.getElementById("users-table-body");
+        tbody.innerHTML = "";
+
+        const { data, error } = await supabase.from("users").select("*").order("created_at");
+
+        if (error) {
+            console.error("Error loading users:", error);
+            document.getElementById("users-status").textContent =
+                "❌ Error loading users.";
+            return;
+        }
+
+        data.forEach((u) => {
+            const tr = document.createElement("tr");
+
+            addCell(tr, u.email);
+            addCell(tr, u.role);
+            addCell(tr, new Date(u.created_at).toLocaleString());
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    function addCell(tr, text) {
+        const td = document.createElement("td");
+        td.textContent = text;
+        tr.appendChild(td);
+    }
+</script>
 
 </body>
 </html>
+
 
 
