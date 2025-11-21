@@ -1,30 +1,33 @@
 /* -------------------------------------------------------
    w3.hub Admin Analytics – FULL REPLACEMENT FILE
 
-   Features:
-   ✔ Accurate consumption (start + restock – end)
-   ✔ Multi-filter (drink + fridge + date)
-   ✔ Clickable charts → filtered drilldown
-   ✔ Hover highlighting + smooth auto-scroll
-   ✔ Clear Filter pill
-   ✔ CSV / PDF export of AGGREGATED, FILTERED data
-     (event, floor, fridge, drink, units, € value, pfand €)
+   ✅ Accurate consumption per combo:
+      units = (sum of start + restock) − (sum of end)
+   ✅ Aggregated rows:
+      Event · Floor · Fridge · Drink · Units · Price/Unit · Value
+   ✅ Charts still work (Drink / Fridge / Date)
+   ✅ Clicking charts filters table
+   ✅ CSV & PDF export AGGREGATED data (no raw logs)
 -------------------------------------------------------- */
 
 // Lookup tables
 let eventsById = {};
 let floorsById = {};
 let fridgesById = {};
-let drinksById = {};
+let drinksById = {}; // must include price_eur
 
 // Chart instances
 let drinkPieChart = null;
 let fridgeBarChart = null;
 let dateLineChart = null;
 
-// Global data
-let currentLogs = [];          // all logs for selected events
-let currentFilteredLogs = [];  // logs after chart filters
+// Global raw logs (enriched with lookups)
+let currentLogs = [];
+
+// Aggregated summary for current filters
+let currentSummary = [];
+
+// Active filters (set by chart clicks)
 let activeFilters = {
   drink: null,
   fridge: null,
@@ -32,54 +35,52 @@ let activeFilters = {
 };
 
 document.addEventListener("DOMContentLoaded", () => {
-  initAnalytics().catch(err => {
+  initAnalytics().catch((err) => {
     console.error("Initialization error:", err);
-    const status = document.getElementById("events-status");
-    if (status) status.textContent = "Error loading analytics.";
+    const s = document.getElementById("events-status");
+    if (s) s.textContent = "Error loading analytics.";
   });
 });
 
+/* -------------------------------------------------------
+   INIT
+-------------------------------------------------------- */
 async function initAnalytics() {
   await loadLookups();
   buildEventCheckboxes();
 
   const applyBtn = document.getElementById("apply-event-filter");
-  if (applyBtn) {
-    applyBtn.addEventListener("click", refreshAnalytics);
-  }
+  if (applyBtn) applyBtn.addEventListener("click", refreshAnalytics);
 
   const csvBtn = document.getElementById("export-csv-btn");
-  if (csvBtn) {
-    csvBtn.addEventListener("click", exportCsv);
-  }
+  if (csvBtn) csvBtn.addEventListener("click", exportCsv);
 
   const pdfBtn = document.getElementById("download-pdf-btn");
-  if (pdfBtn) {
-    pdfBtn.addEventListener("click", downloadPdf);
-  }
+  if (pdfBtn) pdfBtn.addEventListener("click", downloadPdf);
 
   addClearFilterPill();
 }
 
 /* -------------------------------------------------------
-   Load lookup tables
+   LOOKUPS
 -------------------------------------------------------- */
 async function loadLookups() {
   const [events, floors, fridges, drinks] = await Promise.all([
     supabase.from("events").select("*"),
     supabase.from("floors").select("*"),
     supabase.from("fridges").select("*"),
-    supabase.from("drink_types").select("*") // includes price_per_unit, pfand_per_unit now
+    // IMPORTANT: drink_types must have a numeric column price_eur
+    supabase.from("drink_types").select("id, name, price_eur")
   ]);
 
-  (events.data || []).forEach(e => (eventsById[e.id] = e));
-  (floors.data || []).forEach(f => (floorsById[f.id] = f));
-  (fridges.data || []).forEach(fr => (fridgesById[fr.id] = fr));
-  (drinks.data || []).forEach(d => (drinksById[d.id] = d));
+  (events.data || []).forEach((e) => (eventsById[e.id] = e));
+  (floors.data || []).forEach((f) => (floorsById[f.id] = f));
+  (fridges.data || []).forEach((fr) => (fridgesById[fr.id] = fr));
+  (drinks.data || []).forEach((d) => (drinksById[d.id] = d));
 }
 
 /* -------------------------------------------------------
-   Event Checkboxes
+   EVENT CHECKBOXES
 -------------------------------------------------------- */
 function buildEventCheckboxes() {
   const container = document.getElementById("event-checkboxes");
@@ -98,7 +99,7 @@ function buildEventCheckboxes() {
     return;
   }
 
-  events.forEach(ev => {
+  events.forEach((ev) => {
     const label = document.createElement("label");
     label.className = "event-checkbox-item";
 
@@ -107,8 +108,9 @@ function buildEventCheckboxes() {
     cb.value = ev.id;
     cb.checked = true;
 
+    const dateLabel = ev.event_date || "";
     const text = document.createTextNode(
-      ` ${ev.name}${ev.event_date ? " (" + ev.event_date + ")" : ""}`
+      ` ${ev.name}${dateLabel ? " (" + dateLabel + ")" : ""}`
     );
 
     label.appendChild(cb);
@@ -120,11 +122,11 @@ function buildEventCheckboxes() {
 }
 
 function getSelectedEventIds() {
-  return Array.from(
-    document.querySelectorAll("#event-checkboxes input[type='checkbox']")
-  )
-    .filter(cb => cb.checked)
-    .map(cb => cb.value);
+  const container = document.getElementById("event-checkboxes");
+  if (!container) return [];
+  return [...container.querySelectorAll("input[type='checkbox']")]
+    .filter((cb) => cb.checked)
+    .map((cb) => cb.value);
 }
 
 /* -------------------------------------------------------
@@ -134,17 +136,18 @@ async function refreshAnalytics() {
   const status = document.getElementById("events-status");
   const chartsEmpty = document.getElementById("charts-empty-message");
   const tbody = document.getElementById("drilldown-body");
-
   if (tbody) tbody.innerHTML = "";
+
   resetFilters();
 
-  const selectedIds = getSelectedEventIds();
-  if (selectedIds.length === 0) {
+  const selected = getSelectedEventIds();
+  if (selected.length === 0) {
     if (status) status.textContent = "Please select at least one event.";
     clearCharts();
     if (chartsEmpty) chartsEmpty.style.display = "block";
     currentLogs = [];
-    currentFilteredLogs = [];
+    currentSummary = [];
+    fillDrilldownTable(currentSummary);
     return;
   }
 
@@ -153,7 +156,7 @@ async function refreshAnalytics() {
   const { data, error } = await supabase
     .from("fridge_log_entries")
     .select("*")
-    .in("event_id", selectedIds)
+    .in("event_id", selected)
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -162,7 +165,8 @@ async function refreshAnalytics() {
     clearCharts();
     if (chartsEmpty) chartsEmpty.style.display = "block";
     currentLogs = [];
-    currentFilteredLogs = [];
+    currentSummary = [];
+    fillDrilldownTable(currentSummary);
     return;
   }
 
@@ -171,45 +175,102 @@ async function refreshAnalytics() {
     clearCharts();
     if (chartsEmpty) chartsEmpty.style.display = "block";
     currentLogs = [];
-    currentFilteredLogs = [];
+    currentSummary = [];
+    fillDrilldownTable(currentSummary);
     return;
   }
 
-  currentLogs = data.map(row => {
+  // Enrich logs with event/floor/fridge/drink objects
+  currentLogs = data.map((row) => {
     const event = eventsById[row.event_id] || null;
     const fridge = fridgesById[row.fridge_id] || null;
     const drink = drinksById[row.drink_type_id] || null;
     const floor =
       fridge && floorsById[fridge.floor_id] ? floorsById[fridge.floor_id] : null;
 
-    return {
-      ...row,
-      event,
-      fridge,
-      drink,
-      floor
-    };
+    return { ...row, event, fridge, drink, floor };
   });
 
-  currentFilteredLogs = [...currentLogs];
-
-  if (status) status.textContent = `Loaded ${currentLogs.length} log entries.`;
+  // Build charts from raw logs
+  buildCharts(currentLogs);
   if (chartsEmpty) chartsEmpty.style.display = "none";
 
-  buildCharts(currentLogs);
-  fillDrilldownTable(currentFilteredLogs);
+  // Build initial aggregated summary & table
+  currentSummary = buildAggregatedSummary(currentLogs);
+  fillDrilldownTable(currentSummary);
+
+  if (status)
+    status.textContent = `Loaded ${currentLogs.length} log entries across ${currentSummary.length} aggregated rows.`;
 
   autoScrollToSection("drilldown-section");
 }
 
 /* -------------------------------------------------------
-   CHARTS
+   AGGREGATION: logs → summary rows
+-------------------------------------------------------- */
+function buildAggregatedSummary(logs) {
+  const map = {};
+
+  logs.forEach((log) => {
+    if (!log.event || !log.fridge || !log.drink) return;
+
+    const eventId = log.event_id;
+    const fridgeId = log.fridge_id;
+    const drinkId = log.drink_type_id;
+
+    const key = `${eventId}::${fridgeId}::${drinkId}`;
+
+    if (!map[key]) {
+      const floor = log.floor || null;
+      const price = log.drink.price_eur ?? null;
+
+      map[key] = {
+        event: log.event,
+        floor,
+        fridge: log.fridge,
+        drink: log.drink,
+        units: 0,
+        price_eur: price,
+        value_eur: 0
+      };
+    }
+
+    const isStart = log.action_type === "start";
+    const isRestock = log.action_type === "restock";
+    const isEnd = log.action_type === "end";
+    const amt = Number(log.amount) || 0;
+
+    let delta = 0;
+    if (isStart || isRestock) delta = amt;
+    if (isEnd) delta = -amt;
+
+    map[key].units += delta;
+  });
+
+  // Finalize: clamp negatives to 0, compute value
+  const summary = Object.values(map).map((row) => {
+    const units = Math.max(row.units, 0);
+    const price = row.price_eur ?? null;
+    const value = price != null ? units * Number(price) : 0;
+
+    return {
+      ...row,
+      units,
+      value_eur: value
+    };
+  });
+
+  // Optional: remove rows with 0 units if you don't care about them
+  return summary.filter((row) => row.units > 0);
+}
+
+/* -------------------------------------------------------
+   CHARTS (based on raw logs)
 -------------------------------------------------------- */
 function clearCharts() {
   if (drinkPieChart) drinkPieChart.destroy();
   if (fridgeBarChart) fridgeBarChart.destroy();
   if (dateLineChart) dateLineChart.destroy();
-
   drinkPieChart = fridgeBarChart = dateLineChart = null;
 }
 
@@ -220,13 +281,15 @@ function buildCharts(logs) {
   const usageByFridge = {};
   const usageByDate = {};
 
-  logs.forEach(log => {
+  logs.forEach((log) => {
     const isStart = log.action_type === "start";
     const isRestock = log.action_type === "restock";
     const isEnd = log.action_type === "end";
+    const amt = Number(log.amount) || 0;
 
-    const amount = Number(log.amount) || 0;
-    const delta = isStart || isRestock ? amount : -amount;
+    let delta = 0;
+    if (isStart || isRestock) delta = amt;
+    if (isEnd) delta = -amt;
 
     const drinkKey = log.drink ? log.drink.name : "Unknown";
     const fridgeKey = log.fridge ? log.fridge.name : "Unknown";
@@ -248,7 +311,7 @@ function buildDrinkPieChart(obj) {
   const ctx = canvas.getContext("2d");
 
   const labels = Object.keys(obj);
-  const data = labels.map(k => Math.max(obj[k], 0));
+  const data = labels.map((k) => Math.max(obj[k], 0));
 
   drinkPieChart = new Chart(ctx, {
     type: "pie",
@@ -257,7 +320,9 @@ function buildDrinkPieChart(obj) {
       datasets: [{ data }]
     },
     options: {
-      plugins: { legend: { position: "bottom" } },
+      plugins: {
+        legend: { position: "bottom" }
+      },
       onHover: hoverHandler("drink"),
       onClick: clickHandler("drink")
     }
@@ -270,7 +335,7 @@ function buildFridgeBarChart(obj) {
   const ctx = canvas.getContext("2d");
 
   const labels = Object.keys(obj);
-  const data = labels.map(k => obj[k]);
+  const data = labels.map((k) => obj[k]);
 
   fridgeBarChart = new Chart(ctx, {
     type: "bar",
@@ -280,7 +345,9 @@ function buildFridgeBarChart(obj) {
     },
     options: {
       indexAxis: "y",
-      plugins: { legend: { display: false } },
+      plugins: {
+        legend: { display: false }
+      },
       onHover: hoverHandler("fridge"),
       onClick: clickHandler("fridge")
     }
@@ -293,7 +360,7 @@ function buildDateLineChart(obj) {
   const ctx = canvas.getContext("2d");
 
   const labels = Object.keys(obj).sort();
-  const data = labels.map(k => obj[k]);
+  const data = labels.map((k) => obj[k]);
 
   dateLineChart = new Chart(ctx, {
     type: "line",
@@ -302,13 +369,14 @@ function buildDateLineChart(obj) {
       datasets: [
         {
           data,
-          fill: false,
-          tension: 0.2
+          fill: false
         }
       ]
     },
     options: {
-      plugins: { legend: { display: false } },
+      plugins: {
+        legend: { display: false }
+      },
       onHover: hoverHandler("date"),
       onClick: clickHandler("date")
     }
@@ -316,16 +384,16 @@ function buildDateLineChart(obj) {
 }
 
 /* -------------------------------------------------------
-   HANDLERS – MULTI-FILTER + SCROLL
+   CHART INTERACTION → FILTERS + SCROLL
 -------------------------------------------------------- */
 function hoverHandler(type) {
-  return (e, elements) => {
+  return (evt, elements) => {
     document.body.style.cursor = elements.length ? "pointer" : "default";
   };
 }
 
 function clickHandler(type) {
-  return (e, elements) => {
+  return (evt, elements) => {
     if (!elements.length) return;
 
     const idx = elements[0].index;
@@ -333,16 +401,13 @@ function clickHandler(type) {
 
     if (type === "drink" && drinkPieChart) {
       value = drinkPieChart.data.labels[idx];
-    }
-    if (type === "fridge" && fridgeBarChart) {
+    } else if (type === "fridge" && fridgeBarChart) {
       value = fridgeBarChart.data.labels[idx];
-    }
-    if (type === "date" && dateLineChart) {
+    } else if (type === "date" && dateLineChart) {
       value = dateLineChart.data.labels[idx];
     }
 
     activeFilters[type] = value;
-
     applyFilters();
     autoScrollToSection("drilldown-section");
     updateFilterPill();
@@ -350,7 +415,8 @@ function clickHandler(type) {
 }
 
 function applyFilters() {
-  currentFilteredLogs = currentLogs.filter(log => {
+  // Filters are applied on raw logs, then re-aggregated so table matches charts
+  const filteredLogs = currentLogs.filter((log) => {
     const byDrink =
       !activeFilters.drink || (log.drink && log.drink.name === activeFilters.drink);
 
@@ -360,45 +426,50 @@ function applyFilters() {
 
     const byDate =
       !activeFilters.date ||
-      (log.created_at || "").slice(0, 10) === activeFilters.date;
+      (log.created_at || "").startsWith(activeFilters.date);
 
     return byDrink && byFridge && byDate;
   });
 
-  fillDrilldownTable(currentFilteredLogs);
+  currentSummary = buildAggregatedSummary(filteredLogs);
+  fillDrilldownTable(currentSummary);
 }
 
 function resetFilters() {
   activeFilters = { drink: null, fridge: null, date: null };
-  currentFilteredLogs = [...currentLogs];
   updateFilterPill();
 }
 
 /* -------------------------------------------------------
-   UI – FILTER PILL
+   FILTER PILL (UI)
 -------------------------------------------------------- */
 function addClearFilterPill() {
+  const section = document.getElementById("drilldown-section");
+  if (!section) return;
+
   const pill = document.createElement("div");
   pill.id = "filter-pill";
   pill.style.display = "none";
-  pill.style.margin = "10px 0";
-  pill.style.padding = "8px 14px";
+  pill.style.margin = "6px 0 10px";
+  pill.style.padding = "6px 12px";
   pill.style.background = "#1f242e";
-  pill.style.borderRadius = "50px";
-  pill.style.fontSize = "13px";
+  pill.style.borderRadius = "999px";
+  pill.style.fontSize = "12px";
   pill.style.cursor = "pointer";
   pill.style.width = "fit-content";
+  pill.style.color = "#e9e9e9";
 
-  pill.textContent = "Clear filters ✕";
+  pill.textContent = "Filters active – click to clear ✕";
 
   pill.onclick = () => {
     resetFilters();
-    fillDrilldownTable(currentFilteredLogs);
-    pill.style.display = "none";
+    currentSummary = buildAggregatedSummary(currentLogs);
+    fillDrilldownTable(currentSummary);
   };
 
-  const section = document.getElementById("drilldown-section");
-  if (section) section.prepend(pill);
+  // Insert just above the actions
+  const actions = section.querySelector(".drilldown-actions");
+  section.insertBefore(pill, actions);
 }
 
 function updateFilterPill() {
@@ -412,42 +483,50 @@ function updateFilterPill() {
 }
 
 /* -------------------------------------------------------
-   DRILLDOWN TABLE (log-level, for inspection)
+   TABLE RENDER – USES AGGREGATED SUMMARY
 -------------------------------------------------------- */
-function fillDrilldownTable(logs) {
+function fillDrilldownTable(summaryRows) {
   const tbody = document.getElementById("drilldown-body");
   if (!tbody) return;
-
   tbody.innerHTML = "";
 
-  if (!logs || logs.length === 0) {
+  if (!summaryRows || summaryRows.length === 0) {
     const tr = document.createElement("tr");
     const td = document.createElement("td");
     td.colSpan = 7;
-    td.textContent = "No data for current selection / filters.";
+    td.textContent = "No consumption data for the current selection.";
     tr.appendChild(td);
     tbody.appendChild(tr);
     return;
   }
 
-  logs.forEach(log => {
+  summaryRows.forEach((row) => {
     const tr = document.createElement("tr");
 
-    const d = new Date(log.created_at);
-    const timeStr = isNaN(d.getTime()) ? log.created_at : d.toLocaleString();
+    const eventName = row.event ? row.event.name : "";
+    const floorName = row.floor ? row.floor.name : "";
+    const fridgeName = row.fridge ? row.fridge.name : "";
+    const drinkName = row.drink ? row.drink.name : "";
 
-    const eventName = log.event ? log.event.name : "";
-    const floorName = log.floor ? log.floor.name : "";
-    const fridgeName = log.fridge ? log.fridge.name : "";
-    const drinkName = log.drink ? log.drink.name : "";
+    const unitsStr = String(row.units ?? 0);
 
-    addCell(tr, timeStr);
+    const priceNull = row.price_eur == null;
+    const priceStr = priceNull
+      ? ""
+      : Number(row.price_eur).toFixed(2);
+
+    const valueStr =
+      !priceNull && row.units != null
+        ? Number(row.value_eur || 0).toFixed(2)
+        : "";
+
     addCell(tr, eventName);
     addCell(tr, floorName);
     addCell(tr, fridgeName);
     addCell(tr, drinkName);
-    addCell(tr, log.action_type || "");
-    addCell(tr, log.amount != null ? String(log.amount) : "");
+    addCell(tr, unitsStr);
+    addCell(tr, priceStr);
+    addCell(tr, valueStr);
 
     tbody.appendChild(tr);
   });
@@ -460,7 +539,7 @@ function addCell(tr, text) {
 }
 
 /* -------------------------------------------------------
-   UTIL – SCROLL TO ELEMENT
+   SCROLL HELPER
 -------------------------------------------------------- */
 function autoScrollToSection(id) {
   const el = document.getElementById(id);
@@ -468,78 +547,11 @@ function autoScrollToSection(id) {
 }
 
 /* -------------------------------------------------------
-   AGGREGATION FOR EXPORT
-   Groups by: event, floor, fridge, drink
-   Computes:
-   - units_consumed = sum(start + restock – end)
-   - value_eur      = units_consumed * price_per_unit
-   - pfand_eur      = units_consumed * pfand_per_unit
--------------------------------------------------------- */
-function buildAggregatesFromLogs(logs) {
-  const groups = {};
-
-  logs.forEach(log => {
-    const isStart = log.action_type === "start";
-    const isRestock = log.action_type === "restock";
-    const isEnd = log.action_type === "end";
-
-    const amount = Number(log.amount) || 0;
-    const delta = isStart || isRestock ? amount : -amount;
-
-    const eventName = log.event ? log.event.name : "";
-    const floorName = log.floor ? log.floor.name : "";
-    const fridgeName = log.fridge ? log.fridge.name : "";
-    const drinkName = log.drink ? log.drink.name : "";
-
-    const price = log.drink && log.drink.price_per_unit
-      ? Number(log.drink.price_per_unit)
-      : 0;
-    const pfand = log.drink && log.drink.pfand_per_unit
-      ? Number(log.drink.pfand_per_unit)
-      : 0;
-
-    const key = [eventName, floorName, fridgeName, drinkName].join("||");
-    if (!groups[key]) {
-      groups[key] = {
-        eventName,
-        floorName,
-        fridgeName,
-        drinkName,
-        units: 0,
-        value: 0,
-        pfandValue: 0
-      };
-    }
-
-    groups[key].units += delta;
-    groups[key].value += delta * price;
-    groups[key].pfandValue += delta * pfand;
-  });
-
-  return Object.values(groups).map(row => {
-    // clamp negative units to 0 (should not happen if logs are consistent)
-    if (row.units < 0) row.units = 0;
-    return row;
-  });
-}
-
-/* -------------------------------------------------------
-   EXPORT: CSV (aggregated, filtered)
+   EXPORTERS – USE AGGREGATED DATA
 -------------------------------------------------------- */
 function exportCsv() {
-  const logsToUse =
-    currentFilteredLogs && currentFilteredLogs.length
-      ? currentFilteredLogs
-      : currentLogs;
-
-  if (!logsToUse || logsToUse.length === 0) {
+  if (!currentSummary || currentSummary.length === 0) {
     alert("No data to export.");
-    return;
-  }
-
-  const aggregates = buildAggregatesFromLogs(logsToUse);
-  if (!aggregates.length) {
-    alert("No aggregated data (check filters).");
     return;
   }
 
@@ -549,50 +561,50 @@ function exportCsv() {
     "fridge",
     "drink",
     "units_consumed",
-    "value_eur",
-    "pfand_value_eur"
+    "price_per_unit_eur",
+    "total_value_eur"
   ];
 
-  const rows = aggregates.map(row => [
-    row.eventName,
-    row.floorName,
-    row.fridgeName,
-    row.drinkName,
-    row.units.toString(),
-    row.value.toFixed(2),
-    row.pfandValue.toFixed(2)
-  ]);
+  const rows = currentSummary.map((row) => {
+    const eventName = row.event ? row.event.name : "";
+    const floorName = row.floor ? row.floor.name : "";
+    const fridgeName = row.fridge ? row.fridge.name : "";
+    const drinkName = row.drink ? row.drink.name : "";
 
-  const csv = [header.join(","), ...rows.map(r => r.join(","))].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const units = row.units ?? 0;
+    const price = row.price_eur != null ? Number(row.price_eur) : "";
+    const value =
+      row.price_eur != null ? Number(row.value_eur || 0) : "";
+
+    return [
+      eventName,
+      floorName,
+      fridgeName,
+      drinkName,
+      units,
+      price !== "" ? price.toFixed(2) : "",
+      value !== "" ? value.toFixed(2) : ""
+    ];
+  });
+
+  const csv = [header.join(","), ...rows.map((r) => r.join(","))].join("\n");
+  const blob = new Blob([csv], {
+    type: "text/csv;charset=utf-8;"
+  });
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement("a");
   a.href = url;
-  a.download = "w3hub_drinks_consumption.csv";
+  a.download = "w3hub_drinks_aggregated.csv";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
 
-/* -------------------------------------------------------
-   EXPORT: PDF (aggregated, filtered)
--------------------------------------------------------- */
 function downloadPdf() {
-  const logsToUse =
-    currentFilteredLogs && currentFilteredLogs.length
-      ? currentFilteredLogs
-      : currentLogs;
-
-  if (!logsToUse || logsToUse.length === 0) {
+  if (!currentSummary || currentSummary.length === 0) {
     alert("No data to export.");
-    return;
-  }
-
-  const aggregates = buildAggregatesFromLogs(logsToUse);
-  if (!aggregates.length) {
-    alert("No aggregated data (check filters).");
     return;
   }
 
@@ -602,54 +614,52 @@ function downloadPdf() {
   }
 
   const doc = new window.jspdf.jsPDF("p", "mm", "a4");
-
   doc.setFontSize(14);
-  doc.text("w3.hub Drinks Consumption Report", 14, 16);
+  doc.text("w3.hub Drinks – Aggregated Consumption", 14, 16);
 
-  const totalUnits = aggregates.reduce((sum, r) => sum + r.units, 0);
-  const totalValue = aggregates.reduce((sum, r) => sum + r.value, 0);
-  const totalPfand = aggregates.reduce((sum, r) => sum + r.pfandValue, 0);
+  const body = currentSummary.map((row) => {
+    const eventName = row.event ? row.event.name : "";
+    const floorName = row.floor ? row.floor.name : "";
+    const fridgeName = row.fridge ? row.fridge.name : "";
+    const drinkName = row.drink ? row.drink.name : "";
 
-  doc.setFontSize(11);
-  doc.text(
-    `Total units: ${totalUnits}  |  Value: €${totalValue.toFixed(
-      2
-    )}  |  Pfand: €${totalPfand.toFixed(2)}`,
-    14,
-    23
-  );
+    const units = row.units ?? 0;
+    const price =
+      row.price_eur != null ? Number(row.price_eur).toFixed(2) : "";
+    const value =
+      row.price_eur != null ? Number(row.value_eur || 0).toFixed(2) : "";
 
-  const bodyRows = aggregates.map(row => [
-    row.eventName,
-    row.floorName,
-    row.fridgeName,
-    row.drinkName,
-    row.units.toString(),
-    `€${row.value.toFixed(2)}`,
-    `€${row.pfandValue.toFixed(2)}`
-  ]);
+    return [
+      eventName,
+      floorName,
+      fridgeName,
+      drinkName,
+      String(units),
+      price,
+      value
+    ];
+  });
 
-  if (doc.autoTable) {
-    doc.autoTable({
-      startY: 28,
-      head: [
-        [
-          "Event",
-          "Floor",
-          "Fridge",
-          "Drink",
-          "Units Consumed",
-          "Value (€)",
-          "Pfand (€)"
-        ]
-      ],
-      body: bodyRows,
-      styles: { fontSize: 8 }
-    });
-  }
+  doc.autoTable({
+    startY: 22,
+    head: [
+      [
+        "Event",
+        "Floor",
+        "Fridge",
+        "Drink",
+        "Units",
+        "Price / Unit (€)",
+        "Total (€)"
+      ]
+    ],
+    body,
+    styles: { fontSize: 8 }
+  });
 
-  doc.save("w3hub_drinks_consumption.pdf");
+  doc.save("w3hub_drinks_aggregated.pdf");
 }
+
 
 
 

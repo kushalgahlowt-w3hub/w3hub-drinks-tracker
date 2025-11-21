@@ -5,14 +5,13 @@
     <meta name="viewport" content="width=device-width,initial-scale=1.0">
     <title>w3.hub – Admin Analytics</title>
 
-    <!-- Shared styles (same as Runner / Dashboard) -->
+    <!-- Shared styles -->
     <link rel="stylesheet" href="style.css">
 
-  <!-- Chart + PDF libs -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
-
+    <!-- Chart + PDF libs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
 
     <!-- Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -31,11 +30,15 @@
         </div>
         <div class="sidebar-subtitle">Drinks Tracker • Internal tool</div>
 
-        <nav class="sidebar-nav">
+        <nav class="sidebar-nav" data-role="admin-only">
             <a href="dashboard.html">Setup · Events / Floors</a>
             <a href="admin_reports.html" class="active">Analytics Dashboard</a>
             <a href="runner.html">Runner Mode</a>
             <a href="admin_users.html">User Management</a>
+        </nav>
+
+        <nav class="sidebar-nav" data-role="runner-only">
+            <a href="runner.html">Runner Mode</a>
         </nav>
 
         <div class="sidebar-footer">
@@ -50,13 +53,14 @@
 
             <h1>Admin Analytics Dashboard</h1>
             <p class="page-description">
-                Select events to see drink consumption, fridge activity, and detailed logs.
+                Aggregated drink consumption per event, floor, fridge & drink type – with total value.
             </p>
 
             <!-- SUPABASE CLIENT (needed for auth.js & admin_reports.js) -->
             <script>
                 const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
-                const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
+                const SUPABASE_ANON_KEY =
+                    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
                 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             </script>
 
@@ -99,13 +103,15 @@
 
             <hr class="divider">
 
-            <!-- DRILLDOWN -->
+            <!-- AGGREGATED TABLE -->
             <section class="analytics-section" id="drilldown-section">
-                <h2>3. Detailed Log</h2>
+                <h2>3. Aggregated Consumption</h2>
                 <p class="page-description">
-                    All log entries (start, restock, end) for the selected events.
+                    One row per Event · Floor · Fridge · Drink. Units consumed are calculated as:
+                    <strong>start + restock − end</strong>. Value = Units × Price/Unit (€).
                 </p>
 
+                <!-- Filter pill will be injected here -->
                 <div class="drilldown-actions">
                     <button id="export-csv-btn" class="btn-secondary">Export CSV</button>
                     <button id="download-pdf-btn" class="btn-secondary">Download PDF</button>
@@ -115,13 +121,13 @@
                     <table class="history-table" id="drilldown-table">
                         <thead>
                         <tr>
-                            <th>Time</th>
                             <th>Event</th>
                             <th>Floor</th>
                             <th>Fridge</th>
                             <th>Drink</th>
-                            <th>Action</th>
-                            <th>Amount</th>
+                            <th>Units Consumed</th>
+                            <th>Price / Unit (€)</th>
+                            <th>Total Value (€)</th>
                         </tr>
                         </thead>
                         <tbody id="drilldown-body"></tbody>
@@ -138,5 +144,6 @@
 
 </body>
 </html>
+
 
 
