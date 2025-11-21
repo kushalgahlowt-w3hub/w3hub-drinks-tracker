@@ -23,21 +23,35 @@
 <body>
 <div class="layout">
 
-    <!-- SIDEBAR -->
-    <aside class="sidebar">
+    <!-- SIDEBAR (ADMIN ONLY) -->
+    <aside class="sidebar" data-role="admin-only">
         <div class="sidebar-logo">
             <span class="logo-icon">w3</span><span class="logo-dot">.</span><span class="logo-text">hub</span>
         </div>
         <div class="sidebar-subtitle">Drinks Tracker • Internal tool</div>
 
-        <nav class="sidebar-nav" data-role="admin-only">
+        <nav class="sidebar-nav">
             <a href="dashboard.html">Setup · Events / Floors</a>
-            <a href="admin_reports.html" class="active">Analytics Dashboard</a>
             <a href="runner.html">Runner Mode</a>
+            <a href="storage.html">Storage / Deliveries</a>
+            <a href="admin_reports.html" class="active">Analytics Dashboard</a>
             <a href="admin_users.html">User Management</a>
         </nav>
 
-        <nav class="sidebar-nav" data-role="runner-only">
+        <div class="sidebar-footer">
+            <p>Property of w3.hub<br>Internal use only</p>
+            <button onclick="logoutUser()" class="logout-btn">Logout</button>
+        </div>
+    </aside>
+
+    <!-- SIDEBAR (RUNNER ONLY) -->
+    <aside class="sidebar" data-role="runner-only" style="display:none;">
+        <div class="sidebar-logo">
+            <span class="logo-icon">w3</span><span class="logo-dot">.</span><span class="logo-text">hub</span>
+        </div>
+        <div class="sidebar-subtitle">Drinks Tracker • Internal tool</div>
+
+        <nav class="sidebar-nav">
             <a href="runner.html">Runner Mode</a>
         </nav>
 
@@ -53,15 +67,19 @@
 
             <h1>Admin Analytics Dashboard</h1>
             <p class="page-description">
-                Aggregated drink consumption per event, floor, fridge & drink type – including total value.
+                Aggregated drink consumption per event, floor, fridge & drink type – with total value.
             </p>
 
-            <!-- SUPABASE CLIENT -->
+            <!-- SUPABASE CLIENT (needed for admin_reports.js) -->
             <script>
                 const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
                 const SUPABASE_ANON_KEY =
                     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
-                const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+                const supabase = window.supabase.createClient(
+                    SUPABASE_URL,
+                    SUPABASE_ANON_KEY
+                );
             </script>
 
             <!-- EVENT FILTER -->
@@ -80,7 +98,7 @@
             <section class="analytics-section">
                 <h2>2. Charts</h2>
                 <p class="page-description" id="charts-empty-message">
-                    No data yet. Select at least one event with logs.
+                    No data yet. Select at least one event with fridge logs.
                 </p>
 
                 <div class="chart-grid">
@@ -107,12 +125,10 @@
             <section class="analytics-section" id="drilldown-section">
                 <h2>3. Aggregated Consumption</h2>
                 <p class="page-description">
-                    One row per Event · Floor · Fridge · Drink.<br>
-                    Units = <strong>start + restock − end</strong><br>
-                    Value = Units × Price (€)
+                    One row per Event · Floor · Fridge · Drink. Units consumed:
+                    <strong>start + restock − end</strong>. Value = Units × Price (€).
                 </p>
 
-                <!-- Filter pill is injected by JS -->
                 <div class="drilldown-actions">
                     <button id="export-csv-btn" class="btn-secondary">Export CSV</button>
                     <button id="download-pdf-btn" class="btn-secondary">Download PDF</button>
@@ -126,12 +142,13 @@
                             <th>Floor</th>
                             <th>Fridge</th>
                             <th>Drink</th>
-                            <th>Units</th>
-                            <th>Price (€)</th>
-                            <th>Total (€)</th>
+                            <th>Units Consumed</th>
+                            <th>Price / Unit (€)</th>
+                            <th>Total Value (€)</th>
                         </tr>
                         </thead>
                         <tbody id="drilldown-body"></tbody>
+                        <tfoot id="drilldown-footer"></tfoot>
                     </table>
                 </div>
             </section>
@@ -140,11 +157,12 @@
     </main>
 </div>
 
-<!-- Analytics Logic -->
+<!-- Admin Analytics Logic -->
 <script defer src="admin_reports.js"></script>
 
 </body>
 </html>
+
 
 
 

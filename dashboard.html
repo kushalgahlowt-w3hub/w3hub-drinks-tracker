@@ -22,7 +22,6 @@
       background: radial-gradient(circle at top, #181b25 0, #0e0f14 55%, #050609 100%);
     }
 
-    /* same sidebar styles as above to keep consistent */
     .sidebar {
       width: 220px;
       background: #070810;
@@ -151,7 +150,6 @@
       margin: 0;
       font-size: 24px;
     }
-
     .card-subtitle {
       font-size: 13px;
       color: #8c8f94;
@@ -217,7 +215,7 @@
 <body data-role="admin">
 <div class="app-shell">
   <!-- SIDEBAR -->
-  <aside class="sidebar">
+  <aside class="sidebar" data-role="admin-only">
     <div>
       <div class="sidebar-logo">
         <span class="sidebar-logo-w3">w3</span>
@@ -227,15 +225,32 @@
       <div class="sidebar-tagline">Drinks Tracker · Internal tool</div>
     </div>
 
-    <div>
-      <div class="nav-section-title">Admin</div>
-      <nav class="nav-links">
-        <a href="dashboard.html" class="nav-link nav-link-active">Setup · Events / Floors</a>
-        <a href="admin_reports.html" class="nav-link">Analytics Dashboard</a>
-        <a href="runner.html" class="nav-link">Runner Mode</a>
-        <a href="admin_users.html" class="nav-link">User Management</a>
-      </nav>
+    <nav class="nav-links">
+      <a href="dashboard.html" class="nav-link nav-link-active">Setup · Events / Floors</a>
+      <a href="runner.html" class="nav-link">Runner Mode</a>
+      <a href="storage.html" class="nav-link">Storage / Deliveries</a>
+      <a href="admin_reports.html" class="nav-link">Analytics Dashboard</a>
+      <a href="admin_users.html" class="nav-link">User Management</a>
+    </nav>
+
+    <div class="sidebar-footer">
+      Property of w3.hub<br>Internal use only
+      <button class="logout-btn" onclick="logoutUser()">Logout</button>
     </div>
+  </aside>
+
+  <!-- RUNNER SIDEBAR -->
+  <aside class="sidebar" data-role="runner-only" style="display:none;">
+    <div class="sidebar-logo">
+      <span class="sidebar-logo-w3">w3</span>
+      <span class="sidebar-logo-dot">.</span>
+      <span class="sidebar-logo-hub">hub</span>
+    </div>
+    <div class="sidebar-tagline">Drinks Tracker · Internal tool</div>
+
+    <nav class="nav-links">
+      <a href="runner.html" class="nav-link">Runner Mode</a>
+    </nav>
 
     <div class="sidebar-footer">
       Property of w3.hub<br>Internal use only
