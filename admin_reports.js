@@ -1,39 +1,42 @@
 /* -------------------------------------------------------
    w3.hub Admin Analytics – FULL REPLACEMENT FILE
 
-   ✅ Accurate consumption per combo:
-      units = (sum of start + restock) − (sum of end)
-   ✅ Aggregated rows:
-      Event · Floor · Fridge · Drink · Units · Price/Unit · Value
-   ✅ Charts still work (Drink / Fridge / Date)
-   ✅ Clicking charts filters table
-   ✅ CSV & PDF export AGGREGATED data (no raw logs)
+   This version:
+   - Aggregates per Event + Floor + Fridge + Drink
+   - Units Consumed  = start + restock_total - end  (if end exists)
+   - Units Stocked   = start + restock_total        (if no end)
+   - Skips combos with NO start at all
+   - Charts show total UNITS (consumed+stocked as defined above)
+   - Table & exports use the SAME aggregated rows
+   - Clickable charts filter the table (multi-filter)
+   - "Clear filters" pill resets filters
 -------------------------------------------------------- */
 
 // Lookup tables
 let eventsById = {};
 let floorsById = {};
 let fridgesById = {};
-let drinksById = {}; // must include price_eur
+let drinksById = {};
+
+// Global data
+let rawLogs = [];         // raw fridge_log_entries (enriched with lookups)
+let aggregatedRows = [];  // one row per (event, fridge, drink) combo
+
+// Filters driven by chart clicks
+const activeFilters = {
+  drinkName: null,
+  fridgeName: null,
+  dateKey: null,   // YYYY-MM-DD
+};
 
 // Chart instances
 let drinkPieChart = null;
 let fridgeBarChart = null;
 let dateLineChart = null;
 
-// Global raw logs (enriched with lookups)
-let currentLogs = [];
-
-// Aggregated summary for current filters
-let currentSummary = [];
-
-// Active filters (set by chart clicks)
-let activeFilters = {
-  drink: null,
-  fridge: null,
-  date: null
-};
-
+// --------------------------
+// INIT
+// --------------------------
 document.addEventListener("DOMContentLoaded", () => {
   initAnalytics().catch((err) => {
     console.error("Initialization error:", err);
@@ -42,9 +45,6 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-/* -------------------------------------------------------
-   INIT
--------------------------------------------------------- */
 async function initAnalytics() {
   await loadLookups();
   buildEventCheckboxes();
@@ -56,27 +56,26 @@ async function initAnalytics() {
   if (csvBtn) csvBtn.addEventListener("click", exportCsv);
 
   const pdfBtn = document.getElementById("download-pdf-btn");
-  if (pdfBtn) pdfBtn.addEventListener("click", downloadPdf);
+  if (pdfBtn) pdfBtn.addEventListener("click", exportPdf);
 
-  addClearFilterPill();
+  addFilterPill();
 }
 
 /* -------------------------------------------------------
    LOOKUPS
 -------------------------------------------------------- */
 async function loadLookups() {
-  const [events, floors, fridges, drinks] = await Promise.all([
+  const [eventsRes, floorsRes, fridgesRes, drinksRes] = await Promise.all([
     supabase.from("events").select("*"),
     supabase.from("floors").select("*"),
     supabase.from("fridges").select("*"),
-    // IMPORTANT: drink_types must have a numeric column price_eur
-    supabase.from("drink_types").select("id, name, price_eur")
+    supabase.from("drink_types").select("*"), // may also contain price_eur later
   ]);
 
-  (events.data || []).forEach((e) => (eventsById[e.id] = e));
-  (floors.data || []).forEach((f) => (floorsById[f.id] = f));
-  (fridges.data || []).forEach((fr) => (fridgesById[fr.id] = fr));
-  (drinks.data || []).forEach((d) => (drinksById[d.id] = d));
+  (eventsRes.data || []).forEach((e) => (eventsById[e.id] = e));
+  (floorsRes.data || []).forEach((f) => (floorsById[f.id] = f));
+  (fridgesRes.data || []).forEach((fr) => (fridgesById[fr.id] = fr));
+  (drinksRes.data || []).forEach((d) => (drinksById[d.id] = d));
 }
 
 /* -------------------------------------------------------
@@ -89,9 +88,11 @@ function buildEventCheckboxes() {
 
   container.innerHTML = "";
 
-  const events = Object.values(eventsById).sort((a, b) =>
-    (a.event_date || "").localeCompare(b.event_date || "")
-  );
+  const events = Object.values(eventsById).sort((a, b) => {
+    const da = a.event_date || "";
+    const db = b.event_date || "";
+    return da.localeCompare(db);
+  });
 
   if (events.length === 0) {
     container.textContent = "No events found. Add events on the Setup page.";
@@ -108,13 +109,12 @@ function buildEventCheckboxes() {
     cb.value = ev.id;
     cb.checked = true;
 
-    const dateLabel = ev.event_date || "";
-    const text = document.createTextNode(
-      ` ${ev.name}${dateLabel ? " (" + dateLabel + ")" : ""}`
+    const dateLabel = ev.event_date ? ` (${ev.event_date})` : "";
+    label.appendChild(cb);
+    label.appendChild(
+      document.createTextNode(` ${ev.name}${dateLabel}`)
     );
 
-    label.appendChild(cb);
-    label.appendChild(text);
     container.appendChild(label);
   });
 
@@ -124,9 +124,9 @@ function buildEventCheckboxes() {
 function getSelectedEventIds() {
   const container = document.getElementById("event-checkboxes");
   if (!container) return [];
-  return [...container.querySelectorAll("input[type='checkbox']")]
-    .filter((cb) => cb.checked)
-    .map((cb) => cb.value);
+  return Array.from(
+    container.querySelectorAll("input[type='checkbox']:checked")
+  ).map((cb) => cb.value);
 }
 
 /* -------------------------------------------------------
@@ -136,18 +136,16 @@ async function refreshAnalytics() {
   const status = document.getElementById("events-status");
   const chartsEmpty = document.getElementById("charts-empty-message");
   const tbody = document.getElementById("drilldown-body");
+
   if (tbody) tbody.innerHTML = "";
+  resetFiltersUI();
 
-  resetFilters();
-
-  const selected = getSelectedEventIds();
-  if (selected.length === 0) {
+  const selectedIds = getSelectedEventIds();
+  if (selectedIds.length === 0) {
     if (status) status.textContent = "Please select at least one event.";
     clearCharts();
     if (chartsEmpty) chartsEmpty.style.display = "block";
-    currentLogs = [];
-    currentSummary = [];
-    fillDrilldownTable(currentSummary);
+    aggregatedRows = [];
     return;
   }
 
@@ -156,7 +154,7 @@ async function refreshAnalytics() {
   const { data, error } = await supabase
     .from("fridge_log_entries")
     .select("*")
-    .in("event_id", selected)
+    .in("event_id", selectedIds)
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -164,9 +162,7 @@ async function refreshAnalytics() {
     if (status) status.textContent = "Error loading data.";
     clearCharts();
     if (chartsEmpty) chartsEmpty.style.display = "block";
-    currentLogs = [];
-    currentSummary = [];
-    fillDrilldownTable(currentSummary);
+    aggregatedRows = [];
     return;
   }
 
@@ -174,130 +170,188 @@ async function refreshAnalytics() {
     if (status) status.textContent = "No logs for the selected events.";
     clearCharts();
     if (chartsEmpty) chartsEmpty.style.display = "block";
-    currentLogs = [];
-    currentSummary = [];
-    fillDrilldownTable(currentSummary);
+    aggregatedRows = [];
     return;
   }
 
-  // Enrich logs with event/floor/fridge/drink objects
-  currentLogs = data.map((row) => {
+  // Enrich raw logs with lookup data
+  rawLogs = data.map((row) => {
     const event = eventsById[row.event_id] || null;
     const fridge = fridgesById[row.fridge_id] || null;
     const drink = drinksById[row.drink_type_id] || null;
-    const floor =
-      fridge && floorsById[fridge.floor_id] ? floorsById[fridge.floor_id] : null;
+    const floor = fridge && floorsById[fridge.floor_id]
+      ? floorsById[fridge.floor_id]
+      : null;
 
-    return { ...row, event, fridge, drink, floor };
+    return {
+      ...row,
+      event,
+      fridge,
+      drink,
+      floor,
+    };
   });
 
-  // Build charts from raw logs
-  buildCharts(currentLogs);
+  // Aggregate into (event, fridge, drink) combos
+  aggregatedRows = buildAggregates(rawLogs);
+
+  if (!aggregatedRows.length) {
+    if (status)
+      status.textContent =
+        "No complete combos with a start count. Add Start counts first.";
+    clearCharts();
+    if (chartsEmpty) chartsEmpty.style.display = "block";
+    return;
+  }
+
+  if (status) {
+    status.textContent = `Showing ${aggregatedRows.length} combinations.`;
+  }
   if (chartsEmpty) chartsEmpty.style.display = "none";
 
-  // Build initial aggregated summary & table
-  currentSummary = buildAggregatedSummary(currentLogs);
-  fillDrilldownTable(currentSummary);
-
-  if (status)
-    status.textContent = `Loaded ${currentLogs.length} log entries across ${currentSummary.length} aggregated rows.`;
-
+  buildCharts(aggregatedRows);
+  renderTable(); // uses current filters (none at first)
   autoScrollToSection("drilldown-section");
 }
 
 /* -------------------------------------------------------
-   AGGREGATION: logs → summary rows
+   AGGREGATION LOGIC
+   Combos: (event_id, fridge_id, drink_type_id)
 -------------------------------------------------------- */
-function buildAggregatedSummary(logs) {
+function buildAggregates(logs) {
   const map = {};
 
   logs.forEach((log) => {
-    if (!log.event || !log.fridge || !log.drink) return;
-
-    const eventId = log.event_id;
-    const fridgeId = log.fridge_id;
-    const drinkId = log.drink_type_id;
-
-    const key = `${eventId}::${fridgeId}::${drinkId}`;
-
+    const key = `${log.event_id}|${log.fridge_id}|${log.drink_type_id}`;
     if (!map[key]) {
-      const floor = log.floor || null;
-      const price = log.drink.price_eur ?? null;
-
       map[key] = {
-        event: log.event,
-        floor,
-        fridge: log.fridge,
-        drink: log.drink,
-        units: 0,
-        price_eur: price,
-        value_eur: 0
+        key,
+        event_id: log.event_id,
+        fridge_id: log.fridge_id,
+        drink_type_id: log.drink_type_id,
+
+        event: log.event || null,
+        fridge: log.fridge || null,
+        floor: log.floor || null,
+        drink: log.drink || null,
+
+        // For date grouping
+        earliestCreatedAt: log.created_at,
+        dateKey: (log.event && log.event.event_date)
+          ? log.event.event_date
+          : (log.created_at || "").slice(0, 10),
+
+        // Start / restock / end tracking
+        startCount: null,
+        startCreatedAt: null,
+
+        restockTotal: 0,
+
+        endCount: null,
+        endCreatedAt: null,
       };
     }
 
-    const isStart = log.action_type === "start";
-    const isRestock = log.action_type === "restock";
-    const isEnd = log.action_type === "end";
-    const amt = Number(log.amount) || 0;
+    const combo = map[key];
 
-    let delta = 0;
-    if (isStart || isRestock) delta = amt;
-    if (isEnd) delta = -amt;
+    // Track earliest created_at
+    if (
+      !combo.earliestCreatedAt ||
+      (log.created_at && log.created_at < combo.earliestCreatedAt)
+    ) {
+      combo.earliestCreatedAt = log.created_at;
+    }
 
-    map[key].units += delta;
+    // Action-specific
+    if (log.action_type === "start") {
+      if (
+        combo.startCreatedAt == null ||
+        (log.created_at && log.created_at < combo.startCreatedAt)
+      ) {
+        combo.startCreatedAt = log.created_at;
+        combo.startCount = log.amount;
+      }
+    } else if (log.action_type === "restock") {
+      combo.restockTotal += Number(log.amount || 0);
+    } else if (log.action_type === "end") {
+      if (
+        combo.endCreatedAt == null ||
+        (log.created_at && log.created_at > combo.endCreatedAt)
+      ) {
+        combo.endCreatedAt = log.created_at;
+        combo.endCount = log.amount;
+      }
+    }
   });
 
-  // Finalize: clamp negatives to 0, compute value
-  const summary = Object.values(map).map((row) => {
-    const units = Math.max(row.units, 0);
-    const price = row.price_eur ?? null;
-    const value = price != null ? units * Number(price) : 0;
+  // Final pass: compute units + mode + pricing
+  const rows = [];
 
-    return {
-      ...row,
+  Object.values(map).forEach((combo) => {
+    const start = combo.startCount;
+    const restock = combo.restockTotal || 0;
+    const end = combo.endCount;
+
+    if (start == null) {
+      // No start at all → skip entirely
+      return;
+    }
+
+    let units = 0;
+    let mode = "stocked"; // or "consumed"
+
+    if (end != null && end !== undefined) {
+      units = Number(start) + Number(restock) - Number(end);
+      mode = "consumed";
+    } else {
+      units = Number(start) + Number(restock);
+      mode = "stocked";
+    }
+
+    if (units < 0) units = 0;
+
+    const drink = combo.drink || {};
+    const price = drink.price_eur != null ? Number(drink.price_eur) : 0;
+    const totalValue = units * price;
+
+    rows.push({
+      ...combo,
       units,
-      value_eur: value
-    };
+      mode, // "consumed" or "stocked"
+      price_eur: price,
+      total_value_eur: totalValue,
+    });
   });
 
-  // Optional: remove rows with 0 units if you don't care about them
-  return summary.filter((row) => row.units > 0);
+  return rows;
 }
 
 /* -------------------------------------------------------
-   CHARTS (based on raw logs)
+   CHARTS
 -------------------------------------------------------- */
 function clearCharts() {
   if (drinkPieChart) drinkPieChart.destroy();
   if (fridgeBarChart) fridgeBarChart.destroy();
   if (dateLineChart) dateLineChart.destroy();
+
   drinkPieChart = fridgeBarChart = dateLineChart = null;
 }
 
-function buildCharts(logs) {
+function buildCharts(rows) {
   clearCharts();
 
   const usageByDrink = {};
   const usageByFridge = {};
   const usageByDate = {};
 
-  logs.forEach((log) => {
-    const isStart = log.action_type === "start";
-    const isRestock = log.action_type === "restock";
-    const isEnd = log.action_type === "end";
-    const amt = Number(log.amount) || 0;
+  rows.forEach((r) => {
+    const drinkName = r.drink?.name || "Unknown";
+    const fridgeName = r.fridge?.name || "Unknown";
+    const dateKey = r.dateKey || (r.earliestCreatedAt || "").slice(0, 10);
 
-    let delta = 0;
-    if (isStart || isRestock) delta = amt;
-    if (isEnd) delta = -amt;
-
-    const drinkKey = log.drink ? log.drink.name : "Unknown";
-    const fridgeKey = log.fridge ? log.fridge.name : "Unknown";
-    const dateKey = (log.created_at || "").slice(0, 10);
-
-    usageByDrink[drinkKey] = (usageByDrink[drinkKey] || 0) + delta;
-    usageByFridge[fridgeKey] = (usageByFridge[fridgeKey] || 0) + delta;
-    usageByDate[dateKey] = (usageByDate[dateKey] || 0) + delta;
+    usageByDrink[drinkName] = (usageByDrink[drinkName] || 0) + r.units;
+    usageByFridge[fridgeName] = (usageByFridge[fridgeName] || 0) + r.units;
+    usageByDate[dateKey] = (usageByDate[dateKey] || 0) + r.units;
   });
 
   buildDrinkPieChart(usageByDrink);
@@ -311,21 +365,35 @@ function buildDrinkPieChart(obj) {
   const ctx = canvas.getContext("2d");
 
   const labels = Object.keys(obj);
-  const data = labels.map((k) => Math.max(obj[k], 0));
+  const data = labels.map((k) => obj[k]);
 
   drinkPieChart = new Chart(ctx, {
     type: "pie",
     data: {
       labels,
-      datasets: [{ data }]
+      datasets: [
+        {
+          data,
+        },
+      ],
     },
     options: {
       plugins: {
-        legend: { position: "bottom" }
+        legend: { position: "bottom" },
       },
-      onHover: hoverHandler("drink"),
-      onClick: clickHandler("drink")
-    }
+      onHover: (evt, elements) => {
+        document.body.style.cursor = elements.length ? "pointer" : "default";
+      },
+      onClick: (evt, elements) => {
+        if (!elements.length) return;
+        const idx = elements[0].index;
+        const label = drinkPieChart.data.labels[idx];
+        activeFilters.drinkName = label;
+        renderTable();
+        updateFilterPill();
+        autoScrollToSection("drilldown-section");
+      },
+    },
   });
 }
 
@@ -341,16 +409,30 @@ function buildFridgeBarChart(obj) {
     type: "bar",
     data: {
       labels,
-      datasets: [{ data }]
+      datasets: [
+        {
+          data,
+        },
+      ],
     },
     options: {
       indexAxis: "y",
       plugins: {
-        legend: { display: false }
+        legend: { display: false },
       },
-      onHover: hoverHandler("fridge"),
-      onClick: clickHandler("fridge")
-    }
+      onHover: (evt, elements) => {
+        document.body.style.cursor = elements.length ? "pointer" : "default";
+      },
+      onClick: (evt, elements) => {
+        if (!elements.length) return;
+        const idx = elements[0].index;
+        const label = fridgeBarChart.data.labels[idx];
+        activeFilters.fridgeName = label;
+        renderTable();
+        updateFilterPill();
+        autoScrollToSection("drilldown-section");
+      },
+    },
   });
 }
 
@@ -369,164 +451,89 @@ function buildDateLineChart(obj) {
       datasets: [
         {
           data,
-          fill: false
-        }
-      ]
+          fill: false,
+        },
+      ],
     },
     options: {
       plugins: {
-        legend: { display: false }
+        legend: { display: false },
       },
-      onHover: hoverHandler("date"),
-      onClick: clickHandler("date")
-    }
+      onHover: (evt, elements) => {
+        document.body.style.cursor = elements.length ? "pointer" : "default";
+      },
+      onClick: (evt, elements) => {
+        if (!elements.length) return;
+        const idx = elements[0].index;
+        const label = dateLineChart.data.labels[idx];
+        activeFilters.dateKey = label;
+        renderTable();
+        updateFilterPill();
+        autoScrollToSection("drilldown-section");
+      },
+    },
   });
 }
 
 /* -------------------------------------------------------
-   CHART INTERACTION → FILTERS + SCROLL
+   FILTERING + TABLE RENDER
 -------------------------------------------------------- */
-function hoverHandler(type) {
-  return (evt, elements) => {
-    document.body.style.cursor = elements.length ? "pointer" : "default";
-  };
-}
+function getFilteredRows() {
+  return aggregatedRows.filter((r) => {
+    const drinkOk =
+      !activeFilters.drinkName ||
+      (r.drink && r.drink.name === activeFilters.drinkName);
+    const fridgeOk =
+      !activeFilters.fridgeName ||
+      (r.fridge && r.fridge.name === activeFilters.fridgeName);
+    const dateOk =
+      !activeFilters.dateKey ||
+      r.dateKey === activeFilters.dateKey ||
+      (r.earliestCreatedAt || "").startsWith(activeFilters.dateKey);
 
-function clickHandler(type) {
-  return (evt, elements) => {
-    if (!elements.length) return;
-
-    const idx = elements[0].index;
-    let value = null;
-
-    if (type === "drink" && drinkPieChart) {
-      value = drinkPieChart.data.labels[idx];
-    } else if (type === "fridge" && fridgeBarChart) {
-      value = fridgeBarChart.data.labels[idx];
-    } else if (type === "date" && dateLineChart) {
-      value = dateLineChart.data.labels[idx];
-    }
-
-    activeFilters[type] = value;
-    applyFilters();
-    autoScrollToSection("drilldown-section");
-    updateFilterPill();
-  };
-}
-
-function applyFilters() {
-  // Filters are applied on raw logs, then re-aggregated so table matches charts
-  const filteredLogs = currentLogs.filter((log) => {
-    const byDrink =
-      !activeFilters.drink || (log.drink && log.drink.name === activeFilters.drink);
-
-    const byFridge =
-      !activeFilters.fridge ||
-      (log.fridge && log.fridge.name === activeFilters.fridge);
-
-    const byDate =
-      !activeFilters.date ||
-      (log.created_at || "").startsWith(activeFilters.date);
-
-    return byDrink && byFridge && byDate;
+    return drinkOk && fridgeOk && dateOk;
   });
-
-  currentSummary = buildAggregatedSummary(filteredLogs);
-  fillDrilldownTable(currentSummary);
 }
 
-function resetFilters() {
-  activeFilters = { drink: null, fridge: null, date: null };
-  updateFilterPill();
-}
-
-/* -------------------------------------------------------
-   FILTER PILL (UI)
--------------------------------------------------------- */
-function addClearFilterPill() {
-  const section = document.getElementById("drilldown-section");
-  if (!section) return;
-
-  const pill = document.createElement("div");
-  pill.id = "filter-pill";
-  pill.style.display = "none";
-  pill.style.margin = "6px 0 10px";
-  pill.style.padding = "6px 12px";
-  pill.style.background = "#1f242e";
-  pill.style.borderRadius = "999px";
-  pill.style.fontSize = "12px";
-  pill.style.cursor = "pointer";
-  pill.style.width = "fit-content";
-  pill.style.color = "#e9e9e9";
-
-  pill.textContent = "Filters active – click to clear ✕";
-
-  pill.onclick = () => {
-    resetFilters();
-    currentSummary = buildAggregatedSummary(currentLogs);
-    fillDrilldownTable(currentSummary);
-  };
-
-  // Insert just above the actions
-  const actions = section.querySelector(".drilldown-actions");
-  section.insertBefore(pill, actions);
-}
-
-function updateFilterPill() {
-  const pill = document.getElementById("filter-pill");
-  if (!pill) return;
-
-  const active =
-    activeFilters.drink || activeFilters.fridge || activeFilters.date;
-
-  pill.style.display = active ? "inline-block" : "none";
-}
-
-/* -------------------------------------------------------
-   TABLE RENDER – USES AGGREGATED SUMMARY
--------------------------------------------------------- */
-function fillDrilldownTable(summaryRows) {
+function renderTable() {
   const tbody = document.getElementById("drilldown-body");
   if (!tbody) return;
+
   tbody.innerHTML = "";
 
-  if (!summaryRows || summaryRows.length === 0) {
+  const rows = getFilteredRows();
+
+  if (!rows.length) {
     const tr = document.createElement("tr");
     const td = document.createElement("td");
-    td.colSpan = 7;
-    td.textContent = "No consumption data for the current selection.";
+    td.colSpan = 11;
+    td.textContent = "No data to display for the current filters.";
     tr.appendChild(td);
     tbody.appendChild(tr);
     return;
   }
 
-  summaryRows.forEach((row) => {
+  rows.forEach((r) => {
     const tr = document.createElement("tr");
 
-    const eventName = row.event ? row.event.name : "";
-    const floorName = row.floor ? row.floor.name : "";
-    const fridgeName = row.fridge ? row.fridge.name : "";
-    const drinkName = row.drink ? row.drink.name : "";
+    const eventName = r.event?.name || "";
+    const floorName = r.floor?.name || "";
+    const fridgeName = r.fridge?.name || "";
+    const drinkName = r.drink?.name || "";
 
-    const unitsStr = String(row.units ?? 0);
-
-    const priceNull = row.price_eur == null;
-    const priceStr = priceNull
-      ? ""
-      : Number(row.price_eur).toFixed(2);
-
-    const valueStr =
-      !priceNull && row.units != null
-        ? Number(row.value_eur || 0).toFixed(2)
-        : "";
-
+    // One "Units" column; the meaning (consumed vs stocked) is in r.mode
     addCell(tr, eventName);
     addCell(tr, floorName);
     addCell(tr, fridgeName);
     addCell(tr, drinkName);
-    addCell(tr, unitsStr);
-    addCell(tr, priceStr);
-    addCell(tr, valueStr);
+    addCell(tr, String(r.units));           // Units
+    addCell(tr, r.mode === "consumed" ? "Consumed" : "Stocked");
+    addCell(tr, r.price_eur ? r.price_eur.toFixed(2) : "0.00"); // Price / unit
+    addCell(tr, r.total_value_eur ? r.total_value_eur.toFixed(2) : "0.00");
+
+    addCell(tr, r.startCount != null ? String(r.startCount) : "");
+    addCell(tr, r.restockTotal != null ? String(r.restockTotal) : "");
+    addCell(tr, r.endCount != null ? String(r.endCount) : "");
 
     tbody.appendChild(tr);
   });
@@ -539,18 +546,74 @@ function addCell(tr, text) {
 }
 
 /* -------------------------------------------------------
+   FILTER PILL (UI)
+-------------------------------------------------------- */
+function addFilterPill() {
+  const section = document.getElementById("drilldown-section");
+  if (!section) return;
+
+  const pill = document.createElement("div");
+  pill.id = "filter-pill";
+  pill.style.display = "none";
+  pill.style.margin = "8px 0";
+  pill.style.padding = "6px 12px";
+  pill.style.borderRadius = "999px";
+  pill.style.background = "#1f242e";
+  pill.style.fontSize = "12px";
+  pill.style.cursor = "pointer";
+  pill.textContent = "Clear filters ✕";
+
+  pill.addEventListener("click", () => {
+    resetFiltersUI();
+    renderTable();
+  });
+
+  section.prepend(pill);
+}
+
+function updateFilterPill() {
+  const pill = document.getElementById("filter-pill");
+  if (!pill) return;
+
+  const active = activeFilters.drinkName || activeFilters.fridgeName || activeFilters.dateKey;
+  if (!active) {
+    pill.style.display = "none";
+    return;
+  }
+
+  const parts = [];
+  if (activeFilters.drinkName) parts.push(`Drink: ${activeFilters.drinkName}`);
+  if (activeFilters.fridgeName) parts.push(`Fridge: ${activeFilters.fridgeName}`);
+  if (activeFilters.dateKey) parts.push(`Date: ${activeFilters.dateKey}`);
+
+  pill.textContent = `Filters – ${parts.join(" · ")}  ✕`;
+  pill.style.display = "inline-block";
+}
+
+function resetFiltersUI() {
+  activeFilters.drinkName = null;
+  activeFilters.fridgeName = null;
+  activeFilters.dateKey = null;
+  const pill = document.getElementById("filter-pill");
+  if (pill) pill.style.display = "none";
+}
+
+/* -------------------------------------------------------
    SCROLL HELPER
 -------------------------------------------------------- */
 function autoScrollToSection(id) {
   const el = document.getElementById(id);
-  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 /* -------------------------------------------------------
-   EXPORTERS – USE AGGREGATED DATA
+   EXPORT – CSV & PDF
+   Uses the CURRENT filtered rows (what you see in the table)
 -------------------------------------------------------- */
 function exportCsv() {
-  if (!currentSummary || currentSummary.length === 0) {
+  const rows = getFilteredRows();
+  if (!rows.length) {
     alert("No data to export.");
     return;
   }
@@ -560,105 +623,96 @@ function exportCsv() {
     "floor",
     "fridge",
     "drink",
-    "units_consumed",
-    "price_per_unit_eur",
-    "total_value_eur"
+    "units",
+    "mode",
+    "price_eur",
+    "total_value_eur",
+    "start_count",
+    "restock_total",
+    "end_count",
   ];
 
-  const rows = currentSummary.map((row) => {
-    const eventName = row.event ? row.event.name : "";
-    const floorName = row.floor ? row.floor.name : "";
-    const fridgeName = row.fridge ? row.fridge.name : "";
-    const drinkName = row.drink ? row.drink.name : "";
+  const dataRows = rows.map((r) => [
+    r.event?.name || "",
+    r.floor?.name || "",
+    r.fridge?.name || "",
+    r.drink?.name || "",
+    String(r.units),
+    r.mode,
+    r.price_eur != null ? r.price_eur.toFixed(2) : "0.00",
+    r.total_value_eur != null ? r.total_value_eur.toFixed(2) : "0.00",
+    r.startCount != null ? String(r.startCount) : "",
+    r.restockTotal != null ? String(r.restockTotal) : "",
+    r.endCount != null ? String(r.endCount) : "",
+  ]);
 
-    const units = row.units ?? 0;
-    const price = row.price_eur != null ? Number(row.price_eur) : "";
-    const value =
-      row.price_eur != null ? Number(row.value_eur || 0) : "";
-
-    return [
-      eventName,
-      floorName,
-      fridgeName,
-      drinkName,
-      units,
-      price !== "" ? price.toFixed(2) : "",
-      value !== "" ? value.toFixed(2) : ""
-    ];
-  });
-
-  const csv = [header.join(","), ...rows.map((r) => r.join(","))].join("\n");
-  const blob = new Blob([csv], {
-    type: "text/csv;charset=utf-8;"
-  });
+  const csv = [header.join(","), ...dataRows.map((r) => r.join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement("a");
   a.href = url;
-  a.download = "w3hub_drinks_aggregated.csv";
+  a.download = "w3hub_drinks_consumption.csv";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
 
-function downloadPdf() {
-  if (!currentSummary || currentSummary.length === 0) {
+function exportPdf() {
+  const rows = getFilteredRows();
+  if (!rows.length) {
     alert("No data to export.");
     return;
   }
 
-  if (!window.jspdf || !window.jspdf.jsPDF) {
+  if (!window.jspdf || !window.jspdf.jsPDF || !window.jspdf || !window.jspdf.jsPDF) {
     alert("PDF library not loaded.");
     return;
   }
 
   const doc = new window.jspdf.jsPDF("p", "mm", "a4");
   doc.setFontSize(14);
-  doc.text("w3.hub Drinks – Aggregated Consumption", 14, 16);
+  doc.text("w3.hub Drinks Consumption", 14, 16);
 
-  const body = currentSummary.map((row) => {
-    const eventName = row.event ? row.event.name : "";
-    const floorName = row.floor ? row.floor.name : "";
-    const fridgeName = row.fridge ? row.fridge.name : "";
-    const drinkName = row.drink ? row.drink.name : "";
+  const body = rows.map((r) => [
+    r.event?.name || "",
+    r.floor?.name || "",
+    r.fridge?.name || "",
+    r.drink?.name || "",
+    String(r.units),
+    r.mode,
+    r.price_eur != null ? r.price_eur.toFixed(2) : "0.00",
+    r.total_value_eur != null ? r.total_value_eur.toFixed(2) : "0.00",
+    r.startCount != null ? String(r.startCount) : "",
+    r.restockTotal != null ? String(r.restockTotal) : "",
+    r.endCount != null ? String(r.endCount) : "",
+  ]);
 
-    const units = row.units ?? 0;
-    const price =
-      row.price_eur != null ? Number(row.price_eur).toFixed(2) : "";
-    const value =
-      row.price_eur != null ? Number(row.value_eur || 0).toFixed(2) : "";
-
-    return [
-      eventName,
-      floorName,
-      fridgeName,
-      drinkName,
-      String(units),
-      price,
-      value
-    ];
-  });
-
-  doc.autoTable({
-    startY: 22,
-    head: [
-      [
+  if (doc.autoTable) {
+    doc.autoTable({
+      startY: 22,
+      head: [[
         "Event",
         "Floor",
         "Fridge",
         "Drink",
         "Units",
-        "Price / Unit (€)",
-        "Total (€)"
-      ]
-    ],
-    body,
-    styles: { fontSize: 8 }
-  });
+        "Mode",
+        "Price (€)",
+        "Total Value (€)",
+        "Start",
+        "Restock",
+        "End",
+      ]],
+      body,
+      styles: { fontSize: 8 },
+    });
+  }
 
-  doc.save("w3hub_drinks_aggregated.pdf");
+  doc.save("w3hub_drinks_consumption.pdf");
 }
+
 
 
 
