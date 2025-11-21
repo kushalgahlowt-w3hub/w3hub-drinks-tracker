@@ -53,10 +53,10 @@
 
             <h1>Admin Analytics Dashboard</h1>
             <p class="page-description">
-                Aggregated drink consumption per event, floor, fridge & drink type – with total value.
+                Aggregated drink consumption per event, floor, fridge & drink type – including total value.
             </p>
 
-            <!-- SUPABASE CLIENT (needed for auth.js & admin_reports.js) -->
+            <!-- SUPABASE CLIENT -->
             <script>
                 const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
                 const SUPABASE_ANON_KEY =
@@ -80,7 +80,7 @@
             <section class="analytics-section">
                 <h2>2. Charts</h2>
                 <p class="page-description" id="charts-empty-message">
-                    No data yet. Select at least one event with fridge logs.
+                    No data yet. Select at least one event with logs.
                 </p>
 
                 <div class="chart-grid">
@@ -107,11 +107,12 @@
             <section class="analytics-section" id="drilldown-section">
                 <h2>3. Aggregated Consumption</h2>
                 <p class="page-description">
-                    One row per Event · Floor · Fridge · Drink. Units consumed are calculated as:
-                    <strong>start + restock − end</strong>. Value = Units × Price/Unit (€).
+                    One row per Event · Floor · Fridge · Drink.<br>
+                    Units = <strong>start + restock − end</strong><br>
+                    Value = Units × Price (€)
                 </p>
 
-                <!-- Filter pill will be injected here -->
+                <!-- Filter pill is injected by JS -->
                 <div class="drilldown-actions">
                     <button id="export-csv-btn" class="btn-secondary">Export CSV</button>
                     <button id="download-pdf-btn" class="btn-secondary">Download PDF</button>
@@ -125,9 +126,9 @@
                             <th>Floor</th>
                             <th>Fridge</th>
                             <th>Drink</th>
-                            <th>Units Consumed</th>
-                            <th>Price / Unit (€)</th>
-                            <th>Total Value (€)</th>
+                            <th>Units</th>
+                            <th>Price (€)</th>
+                            <th>Total (€)</th>
                         </tr>
                         </thead>
                         <tbody id="drilldown-body"></tbody>
@@ -144,6 +145,7 @@
 
 </body>
 </html>
+
 
 
 
