@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>w3.hub · Deliveries & Storage</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Shared styles -->
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- Auth (route protection + role-based UI) -->
+    <script defer src="auth.js"></script>
+</head>
+<body>
+<div class="layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <span class="logo-icon">w3</span><span class="logo-dot">.</span><span class="logo-text">hub</span>
+        </div>
+        <div class="sidebar-subtitle">Drinks Tracker • Internal tool</div>
+
+        <!-- Admin-only nav -->
+        <nav class="sidebar-nav" data-role="admin-only">
+            <a href="dashboard.html">Setup · Events / Floors</a>
+            <a href="admin_reports.html">Analytics Dashboard</a>
+            <a href="deliveries.html" class="active">Deliveries · Storage</a>
+            <a href="runner.html">Runner Mode</a>
+            <a href="admin_users.html">User Management</a>
+        </nav>
+
+        <!-- Runner-only nav -->
+        <nav class="sidebar-nav" data-role="runner-only">
+            <a href="runner.html">Runner Mode</a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <p>Property of w3.hub<br>Internal use only</p>
+            <button onclick="logoutUser()" class="logout-btn">Logout</button>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="content">
+        <div class="page-card">
+
+            <h1>Deliveries & Storage</h1>
+            <p class="page-description">
+                Log incoming crates from suppliers and track Pfand returns.
+            </p>
+
+            <!-- SUPABASE CLIENT -->
+            <script>
+                const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
+                const SUPABASE_ANON_KEY =
+                    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
+                const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            </script>
+
+            <!-- 1. ADD DELIVERY -->
+            <section class="analytics-section">
+                <h2>1. Add Delivery</h2>
+
+                <form id="delivery-form" class="runner-form" style="max-width:560px;">
+                    <label for="delivery-date">Delivery Date</label>
+                    <input type="date" id="delivery-date" required>
+
+                    <label for="ordered-by">Ordered By</label>
+                    <select id="ordered-by" required>
+                        <option value="">Select…</option>
+                        <option value="BetterLife">BetterLife</option>
+                        <option value="w3.hub">w3.hub</option>
+                        <option value="Other">Other</option>
+                    </select>
+
+                    <label for="supplier">Supplier (optional)</label>
+                    <input type="text" id="supplier" placeholder="e.g. Getränke Hoffmann">
+
+                    <label for="drink-type">Drink Type</label>
+                    <select id="drink-type" required></select>
+
+                    <div style="display:flex; gap:10px;">
+                        <div style="flex:1;">
+                            <label for="crates">Crates Delivered</label>
+                            <input type="number" id="crates" min="0" value="0">
+                        </div>
+                        <div style="flex:1;">
+                            <label for="units-per-crate">Units per crate</label>
+                            <input type="number" id="units-per-crate" min="1" value="24">
+                        </div>
+                        <div style="flex:1;">
+                            <label for="extra-units">Extra units</label>
+                            <input type="number" id="extra-units" min="0" value="0">
+                        </div>
+                    </div>
+
+                    <label for="pfand-returned">Pfand Crates Returned</label>
+                    <input type="number" id="pfand-returned" min="0" value="0">
+
+                    <p class="status-text" id="units-preview">Total units: 0</p>
+
+                    <button type="submit" class="btn-primary">Save Delivery</button>
+                    <p id="delivery-status" class="status-text"></p>
+                </form>
+            </section>
+
+            <hr class="divider">
+
+            <!-- 2. RECENT DELIVERIES -->
+            <section class="analytics-section">
+                <h2>2. Recent Deliveries</h2>
+
+                <div class="table-wrapper">
+                    <table class="history-table">
+                        <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>By</th>
+                            <th>Supplier</th>
+                            <th>Drink</th>
+                            <th>Crates</th>
+                            <th>Units/crate</th>
+                            <th>Extra</th>
+                            <th>Pfand Returned</th>
+                            <th>Total Units</th>
+                        </tr>
+                        </thead>
+                        <tbody id="deliveries-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <hr class="divider">
+
+            <!-- 3. STORAGE SNAPSHOT -->
+            <section class="analytics-section">
+                <h2>3. Storage Snapshot</h2>
+
+                <div class="table-wrapper">
+                    <table class="history-table">
+                        <thead>
+                        <tr>
+                            <th>Drink</th>
+                            <th>Delivered Units</th>
+                            <th>Consumed Units</th>
+                            <th>Approx. In Storage</th>
+                        </tr>
+                        </thead>
+                        <tbody id="storage-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+        </div>
+    </main>
+</div>
+
+<script defer src="deliveries.js"></script>
+</body>
+</html>
