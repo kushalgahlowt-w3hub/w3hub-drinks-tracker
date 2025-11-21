@@ -29,6 +29,7 @@ const ADMIN_PAGE_KEYS = [
   "admin_reports",
   "dashboard",
   "admin_users",
+  "storage",        // ✅ NEW LINE — required for Storage/Deliveries page
 ];
 
 const RUNNER_PAGE_KEYS = [
@@ -168,4 +169,5 @@ document.addEventListener("DOMContentLoaded", () => {
   cleanAuthQueryParams();
   checkAuth();
 });
+
 

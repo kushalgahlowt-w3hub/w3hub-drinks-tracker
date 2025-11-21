@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>w3.hub · Storage / Deliveries</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+
+    <!-- Shared styles -->
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- Auth (route protection + logoutUser) -->
+    <script defer src="auth.js"></script>
+</head>
+
+<body>
+<div class="layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <span class="logo-icon">w3</span><span class="logo-dot">.</span><span class="logo-text">hub</span>
+        </div>
+        <div class="sidebar-subtitle">Drinks Tracker • Internal tool</div>
+
+        <!-- Admin navigation only -->
+        <nav class="sidebar-nav" data-role="admin-only">
+            <a href="dashboard.html">Setup · Events / Floors</a>
+            <a href="admin_reports.html">Analytics Dashboard</a>
+            <a href="storage.html" class="active">Storage / Deliveries</a>
+            <a href="runner.html">Runner Mode</a>
+            <a href="admin_users.html">User Management</a>
+        </nav>
+
+        <!-- Runner-only navigation (just in case a runner lands here, auth.js will redirect) -->
+        <nav class="sidebar-nav" data-role="runner-only">
+            <a href="runner.html">Runner Mode</a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <p>Property of w3.hub<br>Internal use only</p>
+            <button onclick="logoutUser()" class="logout-btn">Logout</button>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="content">
+        <div class="page-card">
+
+            <h1>Storage / Deliveries</h1>
+            <p class="page-description">
+                Track incoming crates by drink type, supplier, and Pfand returned. This feeds into your overall stock picture.
+            </p>
+
+            <!-- SUPABASE CLIENT (needed for auth.js & storage.js) -->
+            <script>
+                const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
+                const SUPABASE_ANON_KEY =
+                    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
+                const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            </script>
+
+            <!-- SECTION 1: Add Delivery -->
+            <section class="analytics-section">
+                <h2>1. Add Delivery</h2>
+                <p class="page-description">
+                    Log crates coming into 5F storage. Pfand returned is how many empty crates you sent back on this delivery.
+                </p>
+
+                <form id="delivery-form" class="runner-form">
+                    <label for="delivery-date">Delivery Date</label>
+                    <input type="date" id="delivery-date" required>
+
+                    <label for="delivery-drink-type">Drink Type</label>
+                    <select id="delivery-drink-type" required></select>
+
+                    <label for="delivery-quantity">Quantity Delivered (crates)</label>
+                    <input type="number" id="delivery-quantity" min="0" required>
+
+                    <label for="delivery-pfand">Pfand Returned (crates)</label>
+                    <input type="number" id="delivery-pfand" min="0" value="0">
+
+                    <label for="delivery-supplier">Supplier</label>
+                    <input type="text" id="delivery-supplier" placeholder="e.g. Getränke Hoffmann">
+
+                    <label for="delivery-ordered-by">Ordered By</label>
+                    <input type="text" id="delivery-ordered-by" placeholder="e.g. w3.hub / BetterLife">
+
+                    <button type="submit" class="btn-primary">Save Delivery</button>
+
+                    <p id="delivery-status" class="status-text"></p>
+                </form>
+            </section>
+
+            <hr class="divider">
+
+            <!-- SECTION 2: Recent Deliveries -->
+            <section class="analytics-section">
+                <h2>2. Recent Deliveries</h2>
+                <p class="page-description">
+                    Last 20 deliveries logged into the system.
+                </p>
+
+                <div class="table-wrapper">
+                    <table class="history-table">
+                        <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Drink</th>
+                            <th>Qty Delivered</th>
+                            <th>Pfand Returned</th>
+                            <th>Supplier</th>
+                            <th>Ordered By</th>
+                        </tr>
+                        </thead>
+                        <tbody id="deliveries-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <hr class="divider">
+
+            <!-- SECTION 3: Storage Stock Summary -->
+            <section class="analytics-section">
+                <h2>3. Storage Stock Summary</h2>
+                <p class="page-description">
+                    Net crates in storage per drink type, calculated as
+                    <strong>Σ delivered − Σ Pfand returned</strong>.
+                    This is a rough stock picture for 5F storage.
+                </p>
+
+                <div class="table-wrapper">
+                    <table class="history-table">
+                        <thead>
+                        <tr>
+                            <th>Drink</th>
+                            <th>Net Crates in Storage</th>
+                        </tr>
+                        </thead>
+                        <tbody id="stock-summary-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+        </div>
+    </main>
+</div>
+
+<!-- Storage / Deliveries Logic -->
+<script defer src="storage.js"></script>
+
+</body>
+</html>
