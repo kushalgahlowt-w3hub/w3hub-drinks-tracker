@@ -336,13 +336,16 @@ button:disabled {
   margin-top: 10px;
   border-radius: 12px;
   border: 1px solid #262a35;
-  overflow: hidden;
+  overflow-x: auto;          /* changed for mobile scroll */
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .history-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
+  min-width: 600px; /* helps scrolling on narrow screens */
 }
 
 .history-table thead {
@@ -467,3 +470,4 @@ button:disabled {
     font-size: 17px;
   }
 }
+

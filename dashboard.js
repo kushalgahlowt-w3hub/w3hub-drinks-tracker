@@ -27,29 +27,63 @@ loadFloors();
 
 
 // -------------------------
-// ADD EVENT
+// ADD EVENT (UPDATED)
 // -------------------------
 document.getElementById("event-form").addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    const name = document.getElementById("event-name").value;
+    const name = document.getElementById("event-name").value.trim();
     const event_date = document.getElementById("event-date").value;
 
-    const { error } = await supabase
-        .from("events")
-        .insert([{ name, event_date }]);
+    const ownerType = document.getElementById("event-owner-type").value;
+    const ownerOther = document.getElementById("event-owner-other").value.trim();
 
-    if (error) {
-        console.error("❌ Error inserting event:", error);
-        document.getElementById("event-status").textContent = "❌ Error adding event";
-        document.getElementById("event-status").className = "error";
+    const statusEl = document.getElementById("event-status");
+    statusEl.textContent = "";
+    statusEl.className = "status";
+
+    if (!name || !event_date || !ownerType) {
+        statusEl.textContent = "❌ Please fill all required fields.";
+        statusEl.classList.add("error");
         return;
     }
 
-    document.getElementById("event-status").textContent = "✅ Event added!";
-    document.getElementById("event-status").className = "success";
+    let owner_final = ownerType;
+    let owner_other_final = null;
+
+    if (ownerType === "Other") {
+        if (!ownerOther) {
+            statusEl.textContent = "❌ Please specify event owner.";
+            statusEl.classList.add("error");
+            return;
+        }
+        owner_final = "Other";
+        owner_other_final = ownerOther;
+    }
+
+    const { error } = await supabase
+        .from("events")
+        .insert([
+            {
+                name,
+                event_date,
+                event_owner_type: owner_final,
+                event_owner_other: owner_other_final
+            }
+        ]);
+
+    if (error) {
+        console.error("❌ Error inserting event:", error);
+        statusEl.textContent = "❌ Error adding event.";
+        statusEl.classList.add("error");
+        return;
+    }
+
+    statusEl.textContent = "✅ Event added!";
+    statusEl.classList.add("success");
 
     document.getElementById("event-form").reset();
+    document.getElementById("event-owner-other-block").style.display = "none";
 });
 
 
@@ -59,21 +93,23 @@ document.getElementById("event-form").addEventListener("submit", async (e) => {
 document.getElementById("floor-form").addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    const name = document.getElementById("floor-name").value;
+    const name = document.getElementById("floor-name").value.trim();
 
     const { error } = await supabase
         .from("floors")
         .insert([{ name }]);
 
+    const statusEl = document.getElementById("floor-status");
+
     if (error) {
         console.error("❌ Error inserting floor:", error);
-        document.getElementById("floor-status").textContent = "❌ Error adding floor";
-        document.getElementById("floor-status").className = "error";
+        statusEl.textContent = "❌ Error adding floor";
+        statusEl.classList.add("error");
         return;
     }
 
-    document.getElementById("floor-status").textContent = "✅ Floor added!";
-    document.getElementById("floor-status").className = "success";
+    statusEl.textContent = "✅ Floor added!";
+    statusEl.classList.add("success");
 
     document.getElementById("floor-form").reset();
     loadFloors();
@@ -86,8 +122,10 @@ document.getElementById("floor-form").addEventListener("submit", async (e) => {
 document.getElementById("fridge-form").addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    const name = document.getElementById("fridge-name").value;
+    const name = document.getElementById("fridge-name").value.trim();
     const floor_id = document.getElementById("fridge-floor").value;
+
+    const statusEl = document.getElementById("fridge-status");
 
     const { error } = await supabase
         .from("fridges")
@@ -95,13 +133,13 @@ document.getElementById("fridge-form").addEventListener("submit", async (e) => {
 
     if (error) {
         console.error("❌ Error inserting fridge:", error);
-        document.getElementById("fridge-status").textContent = "❌ Error adding fridge";
-        document.getElementById("fridge-status").className = "error";
+        statusEl.textContent = "❌ Error adding fridge";
+        statusEl.classList.add("error");
         return;
     }
 
-    document.getElementById("fridge-status").textContent = "✅ Fridge added!";
-    document.getElementById("fridge-status").className = "success";
+    statusEl.textContent = "✅ Fridge added!";
+    statusEl.classList.add("success");
 
     document.getElementById("fridge-form").reset();
 });
@@ -113,7 +151,9 @@ document.getElementById("fridge-form").addEventListener("submit", async (e) => {
 document.getElementById("drink-type-form").addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    const name = document.getElementById("drink-type-name").value;
+    const name = document.getElementById("drink-type-name").value.trim();
+
+    const statusEl = document.getElementById("drink-type-status");
 
     const { error } = await supabase
         .from("drink_types")
@@ -121,13 +161,15 @@ document.getElementById("drink-type-form").addEventListener("submit", async (e) 
 
     if (error) {
         console.error("❌ Error inserting drink type:", error);
-        document.getElementById("drink-type-status").textContent = "❌ Error adding drink type";
-        document.getElementById("drink-type-status").className = "error";
+        statusEl.textContent = "❌ Error adding drink type";
+        statusEl.classList.add("error");
         return;
     }
 
-    document.getElementById("drink-type-status").textContent = "✅ Drink type added!";
-    document.getElementById("drink-type-status").className = "success";
+    statusEl.textContent = "✅ Drink type added!";
+    statusEl.classList.add("success");
 
     document.getElementById("drink-type-form").reset();
 });
+
+

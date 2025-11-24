@@ -1,187 +1,146 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1.0">
-    <title>w3.hub – Runner Mode</title>
+  <meta charset="UTF-8" />
+  <title>w3.hub · Runner Mode</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- Styles -->
-    <link rel="stylesheet" href="style.css">
+  <!-- Shared styles -->
+  <link rel="stylesheet" href="style.css" />
 
-    <!-- Supabase -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-    <!-- Global Auth Handler -->
-    <script defer src="auth.js"></script>
+  <!-- Auth (route protection + logoutUser) -->
+  <script defer src="auth.js"></script>
 </head>
 
 <body>
 <div class="layout">
 
-    <!-- SIDEBAR -->
-    <aside class="sidebar">
-        <div class="sidebar-logo">
-            <span class="logo-icon">w3</span><span class="logo-dot">.</span><span class="logo-text">hub</span>
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">w3</span>
+      <span class="logo-dot">.</span>
+      <span class="logo-text">hub</span>
+    </div>
+    <div class="sidebar-subtitle">Drinks Tracker • Internal tool</div>
+
+    <!-- ADMIN NAV -->
+    <nav class="sidebar-nav" data-role="admin-only">
+      <a href="dashboard.html">Setup · Events / Floors</a>
+      <a href="admin_reports.html">Analytics Dashboard</a>
+      <a href="deliveries.html">Deliveries · Storage</a>
+      <a href="storage.html">Storage / Deliveries</a>
+      <a href="runner.html" class="active">Runner Mode</a>
+      <a href="admin_users.html">User Management</a>
+    </nav>
+
+    <!-- RUNNER NAV -->
+    <nav class="sidebar-nav" data-role="runner-only">
+      <a href="runner.html" class="active">Runner Mode</a>
+      <a href="storage.html">Storage / Deliveries</a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <p>Property of w3.hub<br />Internal use only</p>
+      <button onclick="logoutUser()" class="logout-btn">Logout</button>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="content">
+    <div class="page-card">
+      <h1>Runner Mode</h1>
+      <p class="page-description">
+        Log fridge activity (start, restock, end) during events. Your last 20 entries are shown below, and you may edit your last 5.
+      </p>
+
+      <!-- SUPABASE CLIENT -->
+      <script>
+        const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
+        const SUPABASE_ANON_KEY =
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
+
+        const supabase = window.supabase.createClient(
+          SUPABASE_URL,
+          SUPABASE_ANON_KEY
+        );
+      </script>
+
+      <!-- Runner Form -->
+      <section class="analytics-section">
+        <h2>1. Log Fridge Activity</h2>
+
+        <form id="runner-form" class="runner-form">
+
+          <label for="event-select">Event</label>
+          <select id="event-select" required></select>
+
+          <label for="floor-select">Floor</label>
+          <select id="floor-select" required></select>
+
+          <label for="fridge-select">Fridge</label>
+          <select id="fridge-select" required></select>
+
+          <label for="drink-select">Drink Type</label>
+          <select id="drink-select" required></select>
+
+          <label>Action Type</label>
+          <div class="mode-toggle">
+            <label><input type="radio" name="action-type" value="start" required />Start Count</label>
+            <label><input type="radio" name="action-type" value="restock" />Restock</label>
+            <label><input type="radio" name="action-type" value="end" />End Count</label>
+          </div>
+
+          <label for="amount-input">Amount</label>
+          <input type="number" id="amount-input" min="0" required />
+
+          <button type="submit" class="btn-primary">Save Entry</button>
+          <p id="runner-status" class="status-text"></p>
+        </form>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- Your Activity -->
+      <section class="analytics-section" id="my-activity-section">
+        <h2>2. Your Last 20 Entries</h2>
+        <p class="page-description">
+          You may edit your last 5. Tap any editable row.
+        </p>
+
+        <div class="table-wrapper">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Event</th>
+                <th>Floor</th>
+                <th>Fridge</th>
+                <th>Drink</th>
+                <th>Action</th>
+                <th>Amount</th>
+                <th data-role="runner-only">Edit</th>
+              </tr>
+            </thead>
+            <tbody id="runner-activity-body"></tbody>
+          </table>
         </div>
-        <div class="sidebar-subtitle">Drinks Tracker • Internal tool</div>
+      </section>
 
-        <nav class="sidebar-nav">
-            <!-- Admin-only links -->
-            <a href="dashboard.html" data-role="admin-only">Setup · Events / Floors</a>
-            <a href="admin_reports.html" data-role="admin-only">Analytics Dashboard</a>
-            <a href="admin_users.html" data-role="admin-only">User Management</a>
-
-            <!-- Runner + Admin -->
-            <a href="runner.html" class="active">Runner Mode</a>
-            <!-- My Activity will scroll on this same page to a section -->
-            <a href="#my-activity-section" data-role="runner-only">My Activity</a>
-        </nav>
-
-        <div class="sidebar-footer">
-            <p>Property of w3.hub<br>Internal use only</p>
-            <button onclick="logoutUser()" class="logout-btn">Logout</button>
-        </div>
-    </aside>
-
-    <!-- MAIN CONTENT -->
-    <main class="content">
-        <div class="page-card">
-
-            <h1>Runner: Update Counts</h1>
-            <p class="page-description">
-                Start → Restock → End counts for each fridge.
-            </p>
-
-            <!-- SUPABASE CLIENT INITIALIZATION -->
-            <script>
-                const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
-                const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
-
-                const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            </script>
-
-            <!-- RUNNER FORM -->
-            <form id="log-form" class="runner-form">
-
-                <!-- EVENT -->
-                <label for="event-select">Event</label>
-                <select id="event-select" required></select>
-
-                <!-- FLOOR -->
-                <label for="floor-select">Floor</label>
-                <select id="floor-select" required></select>
-
-                <!-- FRIDGE -->
-                <label for="fridge-select">Fridge</label>
-                <select id="fridge-select" required></select>
-
-                <!-- DRINK -->
-                <label for="drink-select">Drink</label>
-                <select id="drink-select" required></select>
-
-                <!-- ACTION -->
-                <label>Action</label>
-                <div class="mode-toggle">
-                    <label><input type="radio" name="mode" value="start" checked> Start Count</label>
-                    <label><input type="radio" name="mode" value="restock"> Restock</label>
-                    <label><input type="radio" name="mode" value="end"> End Count</label>
-                </div>
-
-                <!-- START -->
-                <div class="count-block" id="start-block">
-                    <label for="start-count">Start Count</label>
-                    <input type="number" id="start-count" min="0">
-                </div>
-
-                <!-- RESTOCK -->
-                <div class="count-block" id="restock-block" style="display:none;">
-                    <label for="restock-count">Restock Amount</label>
-                    <input type="number" id="restock-count" min="0">
-                </div>
-
-                <!-- END -->
-                <div class="count-block" id="end-block" style="display:none;">
-                    <label for="end-count">End Count</label>
-                    <input type="number" id="end-count" min="0">
-                </div>
-
-                <button type="submit" class="btn-primary">Submit</button>
-
-                <p id="log-status" class="status-text"></p>
-            </form>
-
-            <hr class="divider">
-
-            <!-- HISTORY FOR CURRENT SELECTION -->
-            <h2>Recent History (This Event / Fridge / Drink)</h2>
-            <p class="page-description">Last 10 updates for the selected event, fridge, and drink.</p>
-
-            <table class="history-table">
-                <thead>
-                    <tr>
-                        <th>Time</th>
-                        <th>Action</th>
-                        <th>Amount</th>
-                    </tr>
-                </thead>
-                <tbody id="history-body"></tbody>
-            </table>
-
-            <hr class="divider">
-
-            <!-- MY ACTIVITY SECTION -->
-            <section id="my-activity-section">
-                <h2>My Activity (Last 20 Logs)</h2>
-                <p class="page-description">
-                    Your most recent 20 submissions across all events and fridges.
-                </p>
-
-                <table class="history-table">
-                    <thead>
-                        <tr>
-                            <th>Time</th>
-                            <th>Event</th>
-                            <th>Floor</th>
-                            <th>Fridge</th>
-                            <th>Drink</th>
-                            <th>Action</th>
-                            <th>Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody id="my-activity-body"></tbody>
-                </table>
-            </section>
-
-        </div>
-    </main>
-
+    </div>
+  </main>
 </div>
 
-<!-- RUNNER LOGIC -->
+<!-- Runner logic -->
 <script defer src="runner.js"></script>
-
-<!-- MODE BLOCK SWITCHING -->
-<script>
-    document.addEventListener("DOMContentLoaded", () => {
-        const radios = document.querySelectorAll("input[name='mode']");
-        const s = document.getElementById("start-block");
-        const r = document.getElementById("restock-block");
-        const e = document.getElementById("end-block");
-
-        function updateBlocks() {
-            const mode = document.querySelector("input[name='mode']:checked").value;
-            s.style.display = mode === "start" ? "block" : "none";
-            r.style.display = mode === "restock" ? "block" : "none";
-            e.style.display = mode === "end" ? "block" : "none";
-        }
-
-        radios.forEach(x => x.addEventListener("change", updateBlocks));
-        updateBlocks();
-    });
-</script>
 
 </body>
 </html>
+
+
 
 
 

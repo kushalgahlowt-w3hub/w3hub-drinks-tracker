@@ -150,6 +150,7 @@
       margin: 0;
       font-size: 24px;
     }
+
     .card-subtitle {
       font-size: 13px;
       color: #8c8f94;
@@ -209,13 +210,19 @@
       border-top: 1px solid #2a2d35;
       margin: 16px 0;
     }
+
+    #event-owner-other-block {
+      display: none;
+      margin-top: 4px;
+    }
   </style>
 </head>
 
 <body data-role="admin">
 <div class="app-shell">
+
   <!-- SIDEBAR -->
-  <aside class="sidebar" data-role="admin-only">
+  <aside class="sidebar">
     <div>
       <div class="sidebar-logo">
         <span class="sidebar-logo-w3">w3</span>
@@ -225,32 +232,16 @@
       <div class="sidebar-tagline">Drinks Tracker · Internal tool</div>
     </div>
 
-    <nav class="nav-links">
-      <a href="dashboard.html" class="nav-link nav-link-active">Setup · Events / Floors</a>
-      <a href="runner.html" class="nav-link">Runner Mode</a>
-      <a href="storage.html" class="nav-link">Storage / Deliveries</a>
-      <a href="admin_reports.html" class="nav-link">Analytics Dashboard</a>
-      <a href="admin_users.html" class="nav-link">User Management</a>
-    </nav>
-
-    <div class="sidebar-footer">
-      Property of w3.hub<br>Internal use only
-      <button class="logout-btn" onclick="logoutUser()">Logout</button>
+    <div>
+      <div class="nav-section-title">Admin</div>
+      <nav class="nav-links">
+        <a href="dashboard.html" class="nav-link nav-link-active">Setup · Events / Floors</a>
+        <a href="admin_reports.html" class="nav-link">Analytics Dashboard</a>
+        <a href="storage.html" class="nav-link">Storage</a>
+        <a href="deliveries.html" class="nav-link">Deliveries</a>
+        <a href="admin_users.html" class="nav-link">User Management</a>
+      </nav>
     </div>
-  </aside>
-
-  <!-- RUNNER SIDEBAR -->
-  <aside class="sidebar" data-role="runner-only" style="display:none;">
-    <div class="sidebar-logo">
-      <span class="sidebar-logo-w3">w3</span>
-      <span class="sidebar-logo-dot">.</span>
-      <span class="sidebar-logo-hub">hub</span>
-    </div>
-    <div class="sidebar-tagline">Drinks Tracker · Internal tool</div>
-
-    <nav class="nav-links">
-      <a href="runner.html" class="nav-link">Runner Mode</a>
-    </nav>
 
     <div class="sidebar-footer">
       Property of w3.hub<br>Internal use only
@@ -262,7 +253,7 @@
   <main class="main-content">
     <div class="card">
       <h1>🍺 Admin Dashboard</h1>
-      <p class="card-subtitle">Manage Events, Floors, Fridges &amp; Drink Types</p>
+      <p class="card-subtitle">Manage Events, Floors, Fridges & Drink Types</p>
 
       <hr class="section-divider">
 
@@ -270,11 +261,27 @@
       <section>
         <h2>📅 Add Event</h2>
         <form id="event-form">
+
           <label for="event-name">Event Name</label>
           <input type="text" id="event-name" placeholder="Event Name" required>
 
           <label for="event-date">Event Date</label>
           <input type="date" id="event-date" required>
+
+          <!-- NEW FIELD: EVENT OWNER TYPE -->
+          <label for="event-owner-type">Event Owned By</label>
+          <select id="event-owner-type" required>
+            <option value="">Select owner</option>
+            <option value="W3.hub">W3.hub</option>
+            <option value="BetterLife">BetterLife</option>
+            <option value="Other">Other (specify)</option>
+          </select>
+
+          <!-- OTHER TEXT FIELD -->
+          <div id="event-owner-other-block">
+            <label for="event-owner-other">Please Specify</label>
+            <input type="text" id="event-owner-other">
+          </div>
 
           <button type="submit">Add Event</button>
         </form>
@@ -323,6 +330,7 @@
         </form>
         <p id="drink-type-status" class="status"></p>
       </section>
+
     </div>
   </main>
 </div>
@@ -335,9 +343,32 @@
 
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 </script>
+
+<!-- Auth -->
 <script defer src="auth.js"></script>
+
+<!-- Dashboard logic -->
 <script defer src="dashboard.js"></script>
+
+<script>
+  // Show/hide owner-other field
+  document.addEventListener("DOMContentLoaded", () => {
+    const ownerType = document.getElementById("event-owner-type");
+    const otherBlock = document.getElementById("event-owner-other-block");
+
+    ownerType.addEventListener("change", () => {
+      if (ownerType.value === "Other") {
+        otherBlock.style.display = "block";
+      } else {
+        otherBlock.style.display = "none";
+        document.getElementById("event-owner-other").value = "";
+      }
+    });
+  });
+</script>
+
 </body>
 </html>
+
 
 

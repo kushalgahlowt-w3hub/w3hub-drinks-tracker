@@ -8,13 +8,13 @@ function getPageKey() {
   let path = window.location.pathname; // e.g. /runner.html, /runner, /
   if (!path || path === "/") return "index";
 
-  let last = path.split("/").pop();    // "runner" or "runner.html"
+  let last = path.split("/").pop(); // "runner" or "runner.html"
   if (!last) return "index";
 
   if (last.endsWith(".html")) {
-    last = last.slice(0, -5);         // strip ".html"
+    last = last.slice(0, -5); // strip ".html"
   }
-  return last;                         // e.g. "runner", "admin_reports"
+  return last; // e.g. "runner", "admin_reports"
 }
 
 const LOGIN_PAGE_KEY = "index";
@@ -25,16 +25,19 @@ const PUBLIC_PAGE_KEYS = [
   "update_password",
 ];
 
+// Pages that ONLY admins should be allowed to open
 const ADMIN_PAGE_KEYS = [
   "admin_reports",
   "dashboard",
   "admin_users",
-  "storage",        // ✅ NEW LINE — required for Storage/Deliveries page
+  "deliveries",
 ];
 
+// Pages that both admins AND runners can open
 const RUNNER_PAGE_KEYS = [
   "runner",
-  "runner_activity" // if later we add a dedicated page
+  "runner_activity", // if later we add a dedicated page
+  "storage",         // Storage is shared between admin + runner
 ];
 
 // ------------- main auth check -------------
@@ -85,7 +88,7 @@ async function checkAuth() {
     return;
   }
 
-  // --- ADMIN PAGES ---
+  // --- ADMIN-ONLY PAGES ---
   if (ADMIN_PAGE_KEYS.includes(page)) {
     if (role !== "admin") {
       // runners get kicked to runner mode
@@ -94,7 +97,7 @@ async function checkAuth() {
     }
   }
 
-  // --- RUNNER PAGES ---
+  // --- RUNNER PAGES (admin OR runner) ---
   if (RUNNER_PAGE_KEYS.includes(page)) {
     if (role !== "admin" && role !== "runner") {
       await supabase.auth.signOut();
@@ -169,5 +172,6 @@ document.addEventListener("DOMContentLoaded", () => {
   cleanAuthQueryParams();
   checkAuth();
 });
+
 
 
