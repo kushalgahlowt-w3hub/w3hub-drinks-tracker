@@ -1,144 +1,149 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>w3.hub · Runner Mode</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="UTF-8">
+    <title>w3.hub · Runner Mode</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
 
-  <!-- Shared styles -->
-  <link rel="stylesheet" href="style.css" />
+    <!-- Shared styles -->
+    <link rel="stylesheet" href="style.css">
 
-  <!-- Supabase -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- Auth (route protection + logoutUser) -->
-  <script defer src="auth.js"></script>
+    <!-- Auth (route protection + logoutUser) -->
+    <script defer src="auth.js"></script>
 </head>
 
 <body>
 <div class="layout">
 
-  <!-- SIDEBAR -->
-  <aside class="sidebar">
-    <div class="sidebar-logo">
-      <span class="logo-icon">w3</span>
-      <span class="logo-dot">.</span>
-      <span class="logo-text">hub</span>
-    </div>
-    <div class="sidebar-subtitle">Drinks Tracker • Internal tool</div>
-
-    <!-- ADMIN NAV -->
-    <nav class="sidebar-nav" data-role="admin-only">
-      <a href="dashboard.html">Setup · Events / Floors</a>
-      <a href="admin_reports.html">Analytics Dashboard</a>
-      <a href="deliveries.html">Deliveries · Storage</a>
-      <a href="storage.html">Storage / Deliveries</a>
-      <a href="runner.html" class="active">Runner Mode</a>
-      <a href="admin_users.html">User Management</a>
-    </nav>
-
-    <!-- RUNNER NAV -->
-    <nav class="sidebar-nav" data-role="runner-only">
-      <a href="runner.html" class="active">Runner Mode</a>
-      <a href="storage.html">Storage / Deliveries</a>
-    </nav>
-
-    <div class="sidebar-footer">
-      <p>Property of w3.hub<br />Internal use only</p>
-      <button onclick="logoutUser()" class="logout-btn">Logout</button>
-    </div>
-  </aside>
-
-  <!-- MAIN CONTENT -->
-  <main class="content">
-    <div class="page-card">
-      <h1>Runner Mode</h1>
-      <p class="page-description">
-        Log fridge activity (start, restock, end) during events. Your last 20 entries are shown below, and you may edit your last 5.
-      </p>
-
-      <!-- SUPABASE CLIENT -->
-      <script>
-        const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
-        const SUPABASE_ANON_KEY =
-          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
-
-        const supabase = window.supabase.createClient(
-          SUPABASE_URL,
-          SUPABASE_ANON_KEY
-        );
-      </script>
-
-      <!-- Runner Form -->
-      <section class="analytics-section">
-        <h2>1. Log Fridge Activity</h2>
-
-        <form id="runner-form" class="runner-form">
-
-          <label for="event-select">Event</label>
-          <select id="event-select" required></select>
-
-          <label for="floor-select">Floor</label>
-          <select id="floor-select" required></select>
-
-          <label for="fridge-select">Fridge</label>
-          <select id="fridge-select" required></select>
-
-          <label for="drink-select">Drink Type</label>
-          <select id="drink-select" required></select>
-
-          <label>Action Type</label>
-          <div class="mode-toggle">
-            <label><input type="radio" name="action-type" value="start" required />Start Count</label>
-            <label><input type="radio" name="action-type" value="restock" />Restock</label>
-            <label><input type="radio" name="action-type" value="end" />End Count</label>
-          </div>
-
-          <label for="amount-input">Amount</label>
-          <input type="number" id="amount-input" min="0" required />
-
-          <button type="submit" class="btn-primary">Save Entry</button>
-          <p id="runner-status" class="status-text"></p>
-        </form>
-      </section>
-
-      <hr class="divider" />
-
-      <!-- Your Activity -->
-      <section class="analytics-section" id="my-activity-section">
-        <h2>2. Your Last 20 Entries</h2>
-        <p class="page-description">
-          You may edit your last 5. Tap any editable row.
-        </p>
-
-        <div class="table-wrapper">
-          <table class="history-table">
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Event</th>
-                <th>Floor</th>
-                <th>Fridge</th>
-                <th>Drink</th>
-                <th>Action</th>
-                <th>Amount</th>
-                <th data-role="runner-only">Edit</th>
-              </tr>
-            </thead>
-            <tbody id="runner-activity-body"></tbody>
-          </table>
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <span class="logo-icon">w3</span><span class="logo-dot">.</span><span class="logo-text">hub</span>
         </div>
-      </section>
+        <div class="sidebar-subtitle">Drinks Tracker • Internal tool</div>
 
-    </div>
-  </main>
+        <!-- Admin nav -->
+        <nav class="sidebar-nav" data-role="admin-only">
+            <a href="dashboard.html">Setup · Events / Floors</a>
+            <a href="admin_reports.html">Analytics Dashboard</a>
+            <a href="storage.html">Storage / Deliveries</a>
+            <a href="runner.html" class="active">Runner Mode</a>
+            <a href="admin_users.html">User Management</a>
+        </nav>
+
+        <!-- Runner nav -->
+        <nav class="sidebar-nav" data-role="runner-only">
+            <a href="runner.html" class="active">Runner Mode</a>
+            <a href="storage.html">Storage / Deliveries</a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <p>Property of w3.hub<br>Internal use only</p>
+            <button onclick="logoutUser()" class="logout-btn">Logout</button>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="content">
+        <div class="page-card">
+
+            <h1>Runner Mode</h1>
+            <p class="page-description">
+                Log fridge activity (start, restock, end) during events. Your last 20 entries are shown below,
+                and you may edit your last 5.
+            </p>
+
+            <!-- SUPABASE CLIENT (needed for auth.js & runner.js) -->
+            <script>
+                const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
+                const SUPABASE_ANON_KEY =
+                    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
+                const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            </script>
+
+            <!-- 1. LOG FRIDGE ACTIVITY -->
+            <section class="analytics-section">
+                <h2>1. Log Fridge Activity</h2>
+
+                <form id="runner-form" class="runner-form">
+                    <label for="event-select">Event</label>
+                    <select id="event-select" required></select>
+
+                    <label for="floor-select">Floor</label>
+                    <select id="floor-select" required></select>
+
+                    <label for="fridge-select">Fridge</label>
+                    <select id="fridge-select" required></select>
+
+                    <label for="drink-select">Drink Type</label>
+                    <select id="drink-select" required></select>
+
+                    <fieldset class="runner-fieldset">
+                        <legend>Action Type</legend>
+                        <label>
+                            <input type="radio" name="action-type" value="start" checked>
+                            Start Count
+                        </label>
+                        <label>
+                            <input type="radio" name="action-type" value="restock">
+                            Restock
+                        </label>
+                        <label>
+                            <input type="radio" name="action-type" value="end">
+                            End Count
+                        </label>
+                    </fieldset>
+
+                    <label for="amount-input">Amount</label>
+                    <input type="number" id="amount-input" min="0" required>
+
+                    <button type="submit" class="btn-primary">Save Entry</button>
+                    <p id="runner-status" class="status-text"></p>
+                </form>
+            </section>
+
+            <hr class="divider">
+
+            <!-- 2. LAST 20 ENTRIES -->
+            <section class="analytics-section">
+                <h2>2. Your Last 20 Entries</h2>
+                <p class="page-description">
+                    You may edit your last 5. Tap any editable row.
+                </p>
+
+                <div class="table-wrapper">
+                    <table class="history-table">
+                        <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Event</th>
+                            <th>Floor</th>
+                            <th>Fridge</th>
+                            <th>Drink</th>
+                            <th>Action</th>
+                            <th>Amount</th>
+                            <th>Edit</th>
+                        </tr>
+                        </thead>
+                        <tbody id="my-activity-body">
+                        <!-- runner.js will inject rows here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+        </div>
+    </main>
 </div>
 
 <!-- Runner logic -->
 <script defer src="runner.js"></script>
-
 </body>
 </html>
+
 
 
 
