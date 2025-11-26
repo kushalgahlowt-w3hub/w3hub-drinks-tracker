@@ -34,10 +34,18 @@ document.getElementById("event-form").addEventListener("submit", async (e) => {
 
     const name = document.getElementById("event-name").value;
     const event_date = document.getElementById("event-date").value;
+    const owned_by = document.getElementById("event-owned-by").value;
+    const owned_by_other_input = document.getElementById("event-owned-by-other");
+
+    let owned_by_other = null;
+
+    if (owned_by === "Other") {
+        owned_by_other = owned_by_other_input.value.trim();
+    }
 
     const { error } = await supabase
         .from("events")
-        .insert([{ name, event_date }]);
+        .insert([{ name, event_date, owned_by, owned_by_other }]);
 
     if (error) {
         console.error("❌ Error inserting event:", error);
@@ -50,6 +58,23 @@ document.getElementById("event-form").addEventListener("submit", async (e) => {
     document.getElementById("event-status").className = "success";
 
     document.getElementById("event-form").reset();
+    owned_by_other_input.style.display = "none";
+});
+
+
+// -------------------------
+// SHOW OTHER INPUT IF NEEDED
+// -------------------------
+document.getElementById("event-owned-by").addEventListener("change", () => {
+    const dropdown = document.getElementById("event-owned-by");
+    const otherField = document.getElementById("event-owned-by-other");
+
+    if (dropdown.value === "Other") {
+        otherField.style.display = "block";
+    } else {
+        otherField.style.display = "none";
+        otherField.value = "";
+    }
 });
 
 
@@ -131,3 +156,9 @@ document.getElementById("drink-type-form").addEventListener("submit", async (e) 
 
     document.getElementById("drink-type-form").reset();
 });
+
+
+
+
+
+

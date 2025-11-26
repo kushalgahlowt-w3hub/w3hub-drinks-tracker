@@ -68,14 +68,6 @@
       margin-top: 4px;
     }
 
-    .nav-section-title {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: #5f6470;
-      margin: 14px 0 6px;
-    }
-
     .nav-links {
       display: flex;
       flex-direction: column;
@@ -214,6 +206,7 @@
 
 <body data-role="admin">
 <div class="app-shell">
+
   <!-- SIDEBAR -->
   <aside class="sidebar" data-role="admin-only">
     <div>
@@ -239,25 +232,6 @@
     </div>
   </aside>
 
-  <!-- RUNNER SIDEBAR -->
-  <aside class="sidebar" data-role="runner-only" style="display:none;">
-    <div class="sidebar-logo">
-      <span class="sidebar-logo-w3">w3</span>
-      <span class="sidebar-logo-dot">.</span>
-      <span class="sidebar-logo-hub">hub</span>
-    </div>
-    <div class="sidebar-tagline">Drinks Tracker · Internal tool</div>
-
-    <nav class="nav-links">
-      <a href="runner.html" class="nav-link">Runner Mode</a>
-    </nav>
-
-    <div class="sidebar-footer">
-      Property of w3.hub<br>Internal use only
-      <button class="logout-btn" onclick="logoutUser()">Logout</button>
-    </div>
-  </aside>
-
   <!-- MAIN CONTENT -->
   <main class="main-content">
     <div class="card">
@@ -275,6 +249,21 @@
 
           <label for="event-date">Event Date</label>
           <input type="date" id="event-date" required>
+
+          <!-- ✅ OWNED BY FIELD -->
+          <label for="event-owned-by">Owned By</label>
+          <select id="event-owned-by" required>
+            <option value="w3.hub" selected>w3.hub</option>
+            <option value="BetterLife">BetterLife</option>
+            <option value="Other">Other — Specify</option>
+          </select>
+
+          <input
+            type="text"
+            id="event-owned-by-other"
+            placeholder="Specify owner"
+            style="display:none;margin-top:6px;"
+          />
 
           <button type="submit">Add Event</button>
         </form>
@@ -327,6 +316,7 @@
   </main>
 </div>
 
+<!-- SUPABASE -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
   const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
@@ -335,9 +325,15 @@
 
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 </script>
+
 <script defer src="auth.js"></script>
 <script defer src="dashboard.js"></script>
 </body>
 </html>
+
+
+
+
+
 
 
