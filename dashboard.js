@@ -26,24 +26,8 @@ async function loadFloors() {
 loadFloors();
 
 
-// ✅ SHOW/HIDE "Other" input when selecting ownership
-const ownedBySelect = document.getElementById("event-owned-by");
-const ownedByOtherInput = document.getElementById("event-owned-by-other");
-
-if (ownedBySelect) {
-    ownedBySelect.addEventListener("change", () => {
-        if (ownedBySelect.value === "Other") {
-            ownedByOtherInput.style.display = "block";
-        } else {
-            ownedByOtherInput.style.display = "none";
-            ownedByOtherInput.value = "";
-        }
-    });
-}
-
-
 // -------------------------
-// ADD EVENT — UPDATED WITH OWNERSHIP
+// ADD EVENT
 // -------------------------
 document.getElementById("event-form").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -51,14 +35,9 @@ document.getElementById("event-form").addEventListener("submit", async (e) => {
     const name = document.getElementById("event-name").value;
     const event_date = document.getElementById("event-date").value;
 
-    // ✅ NEW — ownership fields
-    const owned_by = ownedBySelect.value;
-    const owned_by_other =
-        owned_by === "Other" ? ownedByOtherInput.value.trim() : null;
-
     const { error } = await supabase
         .from("events")
-        .insert([{ name, event_date, owned_by, owned_by_other }]);
+        .insert([{ name, event_date }]);
 
     if (error) {
         console.error("❌ Error inserting event:", error);
@@ -71,7 +50,6 @@ document.getElementById("event-form").addEventListener("submit", async (e) => {
     document.getElementById("event-status").className = "success";
 
     document.getElementById("event-form").reset();
-    ownedByOtherInput.style.display = "none"; // hide input again
 });
 
 
@@ -153,8 +131,3 @@ document.getElementById("drink-type-form").addEventListener("submit", async (e) 
 
     document.getElementById("drink-type-form").reset();
 });
-
-
-
-
-

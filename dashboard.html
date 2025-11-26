@@ -239,6 +239,25 @@
     </div>
   </aside>
 
+  <!-- RUNNER SIDEBAR -->
+  <aside class="sidebar" data-role="runner-only" style="display:none;">
+    <div class="sidebar-logo">
+      <span class="sidebar-logo-w3">w3</span>
+      <span class="sidebar-logo-dot">.</span>
+      <span class="sidebar-logo-hub">hub</span>
+    </div>
+    <div class="sidebar-tagline">Drinks Tracker · Internal tool</div>
+
+    <nav class="nav-links">
+      <a href="runner.html" class="nav-link">Runner Mode</a>
+    </nav>
+
+    <div class="sidebar-footer">
+      Property of w3.hub<br>Internal use only
+      <button class="logout-btn" onclick="logoutUser()">Logout</button>
+    </div>
+  </aside>
+
   <!-- MAIN CONTENT -->
   <main class="main-content">
     <div class="card">
@@ -256,21 +275,6 @@
 
           <label for="event-date">Event Date</label>
           <input type="date" id="event-date" required>
-
-          <!-- ✅ OWNED BY FIELD ADDED -->
-          <label for="event-owned-by">Owned By</label>
-          <select id="event-owned-by" required>
-            <option value="w3.hub">w3.hub</option>
-            <option value="BetterLife">BetterLife</option>
-            <option value="Other">Other — Specify</option>
-          </select>
-
-          <input
-            type="text"
-            id="event-owned-by-other"
-            placeholder="Specify owner"
-            style="display:none;margin-top:6px;"
-          />
 
           <button type="submit">Add Event</button>
         </form>
@@ -335,9 +339,5 @@
 <script defer src="dashboard.js"></script>
 </body>
 </html>
-
-
-
-
 
 
