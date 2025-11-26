@@ -82,11 +82,11 @@
                 <h2>Create New User</h2>
 
                 <form id="create-user-form">
-                    <label for="new-email">Email</label>
-                    <input type="email" id="new-email" required />
+                    <label for="new-user-email">Email</label>
+                    <input type="email" id="new-user-email" required />
 
-                    <label for="new-role">Role</label>
-                    <select id="new-role">
+                    <label for="new-user-role">Role</label>
+                    <select id="new-user-role">
                         <option value="runner">Runner</option>
                         <option value="admin">Admin</option>
                     </select>
@@ -94,7 +94,7 @@
                     <button type="submit" class="btn-primary">Create User</button>
                 </form>
 
-                <p id="create-user-status" class="status-text"></p>
+                <p id="user-status" class="status-text"></p>
             </section>
 
             <hr class="divider" />
@@ -126,89 +126,98 @@
 
 <!-- Admin Users Logic -->
 <script>
-    document.addEventListener("DOMContentLoaded", () => {
-        loadUsers();
+document.addEventListener("DOMContentLoaded", () => {
+    loadUsers();
+    document.getElementById("create-user-form").addEventListener("submit", createUser);
+});
 
-        document.getElementById("create-user-form").addEventListener("submit", createUser);
+// ✅ Create new Auth User + Database Role Mapping
+async function createUser(e) {
+    e.preventDefault();
+
+    const email = document.getElementById("new-user-email").value.trim();
+    const role = document.getElementById("new-user-role").value.trim();
+    const status = document.getElementById("user-status");
+
+    status.textContent = "";
+    status.className = "status-text";
+
+    const { data: signupData, error: signupErr } = await supabase.auth.admin.createUser({
+        email,
+        email_confirm: true
     });
 
-    async function createUser(e) {
-        e.preventDefault();
-
-        const email = document.getElementById("new-email").value.trim();
-        const role = document.getElementById("new-role").value.trim();
-        const status = document.getElementById("create-user-status");
-
-        status.textContent = "";
-        status.className = "status-text";
-
-        // 1. Create Supabase Auth user (sends password reset link)
-        const { data: signupData, error: signupErr } = await supabase.auth.admin.createUser({
-            email,
-            email_confirm: true
-        });
-
-        if (signupErr) {
-            console.error("Error creating auth user:", signupErr);
-            status.textContent = "❌ Error creating user.";
-            status.classList.add("error");
-            return;
-        }
-
-        const authUserId = signupData.user.id;
-
-        // 2. Insert into users table with role
-        const { error: userErr } = await supabase
-            .from("users")
-            .insert([{ email, role, auth_user_id: authUserId }]);
-
-        if (userErr) {
-            console.error("Error inserting user role:", userErr);
-            status.textContent = "❌ Error saving user role.";
-            status.classList.add("error");
-            return;
-        }
-
-        status.textContent = "✅ User created! Password email sent.";
-        status.classList.add("success");
-
-        document.getElementById("create-user-form").reset();
-        loadUsers();
+    if (signupErr) {
+        console.error("Error creating auth user:", signupErr);
+        status.textContent = "❌ Failed to create user.";
+        status.classList.add("error");
+        return;
     }
 
-    async function loadUsers() {
-        const tbody = document.getElementById("users-table-body");
-        tbody.innerHTML = "";
+    const authUserId = signupData.user.id;
 
-        const { data, error } = await supabase.from("users").select("*").order("created_at");
+    const { error: userErr } = await supabase
+        .from("users")
+        .insert([{ email, role, auth_user_id: authUserId }]);
 
-        if (error) {
-            console.error("Error loading users:", error);
-            document.getElementById("users-status").textContent =
-                "❌ Error loading users.";
-            return;
-        }
-
-        data.forEach((u) => {
-            const tr = document.createElement("tr");
-
-            addCell(tr, u.email);
-            addCell(tr, u.role);
-            addCell(tr, new Date(u.created_at).toLocaleString());
-
-            tbody.appendChild(tr);
-        });
+    if (userErr) {
+        console.error("Error inserting user role:", userErr);
+        status.textContent = "❌ Failed to save user role.";
+        status.classList.add("error");
+        return;
     }
 
-    function addCell(tr, text) {
-        const td = document.createElement("td");
-        td.textContent = text;
-        tr.appendChild(td);
+    status.textContent = "✅ User created! Password email sent.";
+    status.classList.add("success");
+
+    document.getElementById("create-user-form").reset();
+    loadUsers();
+}
+
+// ✅ Load users table — NO created_at dependency
+async function loadUsers() {
+    const tbody = document.getElementById("users-table-body");
+    tbody.innerHTML = "";
+
+    const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .order("email", { ascending: true });
+
+    if (error) {
+        console.error("Error loading users:", error);
+        document.getElementById("users-status").textContent = "❌ Error loading users.";
+        return;
     }
+
+    if (!data || data.length === 0) {
+        document.getElementById("users-status").textContent = "No users found.";
+        return;
+    }
+
+    document.getElementById("users-status").textContent = "";
+
+    data.forEach((u) => {
+        const tr = document.createElement("tr");
+
+        addCell(tr, u.email);
+        addCell(tr, u.role);
+        addCell(tr, "–"); // ✅ Placeholder until created_at column exists
+
+        tbody.appendChild(tr);
+    });
+}
+
+function addCell(tr, text) {
+    const td = document.createElement("td");
+    td.textContent = text;
+    tr.appendChild(td);
+}
 </script>
 
 </body>
 </html>
+
 
 
 
