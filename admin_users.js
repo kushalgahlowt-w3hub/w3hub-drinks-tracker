@@ -1,8 +1,6 @@
 // admin_users.js
 // Manages rows in your public "users" table (id, email, role)
-// Does NOT create/delete Supabase Auth users (for security reasons).
-
-let currentAdminEmail = null;
+// Does NOT create/delete Supabase Auth users — only maps roles.
 
 document.addEventListener("DOMContentLoaded", () => {
   initUserManagement().catch(err => {
@@ -13,23 +11,18 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 async function initUserManagement() {
-  // Identify the currently logged-in admin (for safety checks)
-  const { data: userData, error: userErr } = await supabase.auth.getUser();
-  if (!userErr && userData?.user?.email) {
-    currentAdminEmail = userData.user.email;
-  }
-
-  // Wire up form
-  const form = document.getElementById("user-form");
-  form.addEventListener("submit", handleAddUser);
-
-  // Load existing users into table
   await loadUsersTable();
+
+  const form = document.getElementById("create-user-form");
+  if (form) {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      await createUser();
+    });
+  }
 }
 
-/* ---------------------------------------
-   LOAD USERS
----------------------------------------- */
+// ✅ Load all users into table
 async function loadUsersTable() {
   const tbody = document.getElementById("users-table-body");
   tbody.innerHTML = "";
@@ -37,7 +30,7 @@ async function loadUsersTable() {
   const { data, error } = await supabase
     .from("users")
     .select("*")
-    .order("email", { ascending: true });
+    .order("email", { ascending: true }); // ✅ Safe ordering
 
   if (error) {
     console.error("Error loading users:", error);
@@ -54,113 +47,90 @@ async function loadUsersTable() {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
     cell.colSpan = 4;
-    cell.textContent = "No users yet. Add one above.";
+    cell.textContent = "No users found.";
     row.appendChild(cell);
     tbody.appendChild(row);
     return;
   }
 
-  data.forEach(userRow => {
-    const tr = document.createElement("tr");
-
-    // Email
-    const emailTd = document.createElement("td");
-    emailTd.textContent = userRow.email;
-    tr.appendChild(emailTd);
-
-    // Role (with dropdown)
-    const roleTd = document.createElement("td");
-    const roleSelect = document.createElement("select");
-    roleSelect.innerHTML = `
-      <option value="runner">Runner</option>
-      <option value="admin">Admin</option>
-    `;
-    roleSelect.value = userRow.role || "runner";
-    roleSelect.onchange = () => updateUserRole(userRow.id, roleSelect.value, userRow.email);
-    roleTd.appendChild(roleSelect);
-    tr.appendChild(roleTd);
-
-    // ID
-    const idTd = document.createElement("td");
-    idTd.textContent = userRow.id;
-    tr.appendChild(idTd);
-
-    // Actions
-    const actionsTd = document.createElement("td");
-    actionsTd.style.whiteSpace = "nowrap";
-
-    const deleteBtn = document.createElement("button");
-    deleteBtn.textContent = "Remove";
-    deleteBtn.className = "btn-secondary";
-    deleteBtn.style.fontSize = "11px";
-    deleteBtn.style.padding = "6px 10px";
-    deleteBtn.onclick = () => deleteUserMapping(userRow.id, userRow.email);
-
-    actionsTd.appendChild(deleteBtn);
-    tr.appendChild(actionsTd);
-
-    tbody.appendChild(tr);
-  });
+  data.forEach(user => addUserRow(user));
 }
 
-/* ---------------------------------------
-   ADD USER MAPPING
----------------------------------------- */
-async function handleAddUser(e) {
-  e.preventDefault();
+// ✅ Add a row to users table UI
+function addUserRow(user) {
+  const tbody = document.getElementById("users-table-body");
+  const row = document.createElement("tr");
 
+  // Email cell
+  const emailCell = document.createElement("td");
+  emailCell.textContent = user.email;
+  row.appendChild(emailCell);
+
+  // Role dropdown
+  const roleCell = document.createElement("td");
+  const select = document.createElement("select");
+  select.innerHTML = `
+    <option value="runner" ${user.role === "runner" ? "selected" : ""}>Runner</option>
+    <option value="admin" ${user.role === "admin" ? "selected" : ""}>Admin</option>
+  `;
+  select.addEventListener("change", () => updateUserRole(user.id, select.value));
+  roleCell.appendChild(select);
+  row.appendChild(roleCell);
+
+  // Created column placeholder (not required)
+  const createdCell = document.createElement("td");
+  createdCell.textContent = "-"; // ✅ avoids needing created_at column
+  row.appendChild(createdCell);
+
+  // Delete button
+  const actionCell = document.createElement("td");
+  const delBtn = document.createElement("button");
+  delBtn.textContent = "Remove";
+  delBtn.classList.add("danger-btn");
+  delBtn.addEventListener("click", () => deleteUser(user.id));
+  actionCell.appendChild(delBtn);
+  row.appendChild(actionCell);
+
+  tbody.appendChild(row);
+}
+
+// ✅ Create new User → inserts email + role into mapping table
+async function createUser() {
+  const emailInput = document.getElementById("new-user-email");
+  const roleSelect = document.getElementById("new-user-role");
   const statusEl = document.getElementById("user-status");
-  statusEl.textContent = "";
-  statusEl.className = "status-text";
 
-  const id = document.getElementById("user-id").value.trim();
-  const email = document.getElementById("user-email").value.trim();
-  const role = document.getElementById("user-role").value;
+  const email = emailInput.value.trim().toLowerCase();
+  const role = roleSelect.value;
 
-  if (!id || !email || !role) {
-    statusEl.textContent = "Please fill out all fields.";
-    return;
-  }
-
-  // Insert into users table
-  const { error } = await supabase.from("users").insert([
-    { id, email, role }
-  ]);
-
-  if (error) {
-    console.error("Error inserting user mapping:", error);
-    statusEl.textContent = "Error adding user: " + error.message;
+  if (!email) {
+    statusEl.textContent = "Email is required.";
     statusEl.classList.add("error");
     return;
   }
 
-  statusEl.textContent = "User mapping added.";
+  const { error } = await supabase
+    .from("users")
+    .insert([{ email, role }]);
+
+  if (error) {
+    console.error("Error creating user:", error);
+    statusEl.textContent = "Error creating user: " + error.message;
+    statusEl.classList.add("error");
+    return;
+  }
+
+  statusEl.textContent = "User added successfully!";
+  statusEl.classList.remove("error");
   statusEl.classList.add("success");
 
-  // Clear form
-  document.getElementById("user-id").value = "";
-  document.getElementById("user-email").value = "";
-  document.getElementById("user-role").value = "runner";
-
-  // Reload table
+  emailInput.value = "";
   await loadUsersTable();
 }
 
-/* ---------------------------------------
-   UPDATE USER ROLE
----------------------------------------- */
-async function updateUserRole(id, newRole, email) {
+// ✅ Update role
+async function updateUserRole(id, newRole) {
   const statusEl = document.getElementById("user-status");
-  statusEl.textContent = "";
-
-  // Prevent demoting yourself if you are the only admin (we'd need a full check, but keep it simple)
-  if (email === currentAdminEmail && newRole !== "admin") {
-    statusEl.textContent = "You cannot remove your own admin role here.";
-    statusEl.classList.add("error");
-    // Reload table to reset dropdown
-    await loadUsersTable();
-    return;
-  }
 
   const { error } = await supabase
     .from("users")
@@ -174,29 +144,16 @@ async function updateUserRole(id, newRole, email) {
     return;
   }
 
-  statusEl.textContent = `Role updated to "${newRole}".`;
+  statusEl.textContent = "Role updated!";
+  statusEl.classList.remove("error");
   statusEl.classList.add("success");
+
+  await loadUsersTable();
 }
 
-/* ---------------------------------------
-   DELETE USER MAPPING
----------------------------------------- */
-async function deleteUserMapping(id, email) {
+// ✅ Delete user mapping
+async function deleteUser(id) {
   const statusEl = document.getElementById("user-status");
-  statusEl.textContent = "";
-  statusEl.className = "status-text";
-
-  if (email === currentAdminEmail) {
-    statusEl.textContent = "You cannot remove your own user mapping.";
-    statusEl.classList.add("error");
-    return;
-  }
-
-  const confirmMsg =
-    `Remove mapping for ${email}? This will block their access to the app.\n` +
-    `You may also want to remove them from Supabase Auth → Users.`;
-
-  if (!window.confirm(confirmMsg)) return;
 
   const { error } = await supabase
     .from("users")
@@ -205,14 +162,16 @@ async function deleteUserMapping(id, email) {
 
   if (error) {
     console.error("Error deleting user mapping:", error);
-    statusEl.textContent = "Error removing user: " + error.message;
+    statusEl.textContent = "Error deleting user: " + error.message;
     statusEl.classList.add("error");
     return;
   }
 
-  statusEl.textContent = "User mapping removed. They can no longer use the app.";
+  statusEl.textContent = "User removed!";
+  statusEl.classList.remove("error");
   statusEl.classList.add("success");
 
   await loadUsersTable();
 }
+
 
