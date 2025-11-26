@@ -22,32 +22,39 @@ async function loadFloors() {
         dropdown.appendChild(option);
     });
 }
+
 loadFloors();
 
 
-// -------------------------
-// SHOW/HIDE "OTHER OWNER"
-// -------------------------
-document.getElementById("event-owned-by").addEventListener("change", (e) => {
-    const otherField = document.getElementById("event-owned-by-other");
-    otherField.style.display = e.target.value === "Other" ? "block" : "none";
-});
+// ✅ SHOW/HIDE "Other" input when selecting ownership
+const ownedBySelect = document.getElementById("event-owned-by");
+const ownedByOtherInput = document.getElementById("event-owned-by-other");
+
+if (ownedBySelect) {
+    ownedBySelect.addEventListener("change", () => {
+        if (ownedBySelect.value === "Other") {
+            ownedByOtherInput.style.display = "block";
+        } else {
+            ownedByOtherInput.style.display = "none";
+            ownedByOtherInput.value = "";
+        }
+    });
+}
 
 
 // -------------------------
-// ADD EVENT — NOW WITH OWNERSHIP
+// ADD EVENT — UPDATED WITH OWNERSHIP
 // -------------------------
 document.getElementById("event-form").addEventListener("submit", async (e) => {
     e.preventDefault();
 
     const name = document.getElementById("event-name").value;
     const event_date = document.getElementById("event-date").value;
-    const owned_by = document.getElementById("event-owned-by").value;
 
-    let owned_by_other = null;
-    if (owned_by === "Other") {
-        owned_by_other = document.getElementById("event-owned-by-other").value.trim();
-    }
+    // ✅ NEW — ownership fields
+    const owned_by = ownedBySelect.value;
+    const owned_by_other =
+        owned_by === "Other" ? ownedByOtherInput.value.trim() : null;
 
     const { error } = await supabase
         .from("events")
@@ -56,12 +63,15 @@ document.getElementById("event-form").addEventListener("submit", async (e) => {
     if (error) {
         console.error("❌ Error inserting event:", error);
         document.getElementById("event-status").textContent = "❌ Error adding event";
+        document.getElementById("event-status").className = "error";
         return;
     }
 
     document.getElementById("event-status").textContent = "✅ Event added!";
+    document.getElementById("event-status").className = "success";
+
     document.getElementById("event-form").reset();
-    document.getElementById("event-owned-by-other").style.display = "none";
+    ownedByOtherInput.style.display = "none"; // hide input again
 });
 
 
@@ -80,10 +90,13 @@ document.getElementById("floor-form").addEventListener("submit", async (e) => {
     if (error) {
         console.error("❌ Error inserting floor:", error);
         document.getElementById("floor-status").textContent = "❌ Error adding floor";
+        document.getElementById("floor-status").className = "error";
         return;
     }
 
     document.getElementById("floor-status").textContent = "✅ Floor added!";
+    document.getElementById("floor-status").className = "success";
+
     document.getElementById("floor-form").reset();
     loadFloors();
 });
@@ -105,10 +118,13 @@ document.getElementById("fridge-form").addEventListener("submit", async (e) => {
     if (error) {
         console.error("❌ Error inserting fridge:", error);
         document.getElementById("fridge-status").textContent = "❌ Error adding fridge";
+        document.getElementById("fridge-status").className = "error";
         return;
     }
 
     document.getElementById("fridge-status").textContent = "✅ Fridge added!";
+    document.getElementById("fridge-status").className = "success";
+
     document.getElementById("fridge-form").reset();
 });
 
@@ -128,12 +144,16 @@ document.getElementById("drink-type-form").addEventListener("submit", async (e) 
     if (error) {
         console.error("❌ Error inserting drink type:", error);
         document.getElementById("drink-type-status").textContent = "❌ Error adding drink type";
+        document.getElementById("drink-type-status").className = "error";
         return;
     }
 
     document.getElementById("drink-type-status").textContent = "✅ Drink type added!";
+    document.getElementById("drink-type-status").className = "success";
+
     document.getElementById("drink-type-form").reset();
 });
+
 
 
 
