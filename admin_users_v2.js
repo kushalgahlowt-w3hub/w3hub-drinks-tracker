@@ -1,15 +1,26 @@
 // admin_users.js
-// Manages rows in your public "users" table (id, email, role)
-// Does NOT create/delete Supabase Auth users — only maps roles.
+// ------------------------------------------------------
+// NOTE:
+// This file manages rows in your public "users" table
+// (id, email, role). It does NOT create or delete
+// Supabase Auth accounts. You must still create the
+// actual login in Supabase Auth > Users.
+// ------------------------------------------------------
 
 document.addEventListener("DOMContentLoaded", () => {
   initUserManagement().catch(err => {
     console.error("Error initialising user management:", err);
     const s = document.getElementById("user-status");
-    if (s) s.textContent = "Error initialising user management.";
+    if (s) {
+      s.textContent = "Error initialising user management.";
+      s.classList.add("error");
+    }
   });
 });
 
+// ------------------------------------------------------
+// Initialise page: load table + wire up form
+// ------------------------------------------------------
 async function initUserManagement() {
   await loadUsersTable();
 
@@ -17,20 +28,39 @@ async function initUserManagement() {
   if (form) {
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      await createUser();
+      await handleCreateUserSubmit();
     });
   }
 }
 
-// ✅ Load all users into table
+// Small helper to centralise status messages
+function setUserStatus(message, type = "info") {
+  const statusEl = document.getElementById("user-status");
+  if (!statusEl) return;
+
+  statusEl.textContent = message || "";
+  statusEl.className = "status-text";
+
+  if (type === "error") {
+    statusEl.classList.add("error");
+  } else if (type === "success") {
+    statusEl.classList.add("success");
+  }
+}
+
+// ------------------------------------------------------
+// Load all users into the table
+// ------------------------------------------------------
 async function loadUsersTable() {
   const tbody = document.getElementById("users-table-body");
+  if (!tbody) return;
+
   tbody.innerHTML = "";
 
   const { data, error } = await supabase
     .from("users")
     .select("*")
-    .order("email", { ascending: true }); // ✅ Safe ordering
+    .order("email", { ascending: true }); // safe ordering by email
 
   if (error) {
     console.error("Error loading users:", error);
@@ -56,14 +86,18 @@ async function loadUsersTable() {
   data.forEach(user => addUserRow(user));
 }
 
-// ✅ Add a row to users table UI
+// ------------------------------------------------------
+// Add a single row to the users table UI
+// ------------------------------------------------------
 function addUserRow(user) {
   const tbody = document.getElementById("users-table-body");
+  if (!tbody) return;
+
   const row = document.createElement("tr");
 
   // Email cell
   const emailCell = document.createElement("td");
-  emailCell.textContent = user.email;
+  emailCell.textContent = user.email || "";
   row.appendChild(emailCell);
 
   // Role dropdown
@@ -77,9 +111,9 @@ function addUserRow(user) {
   roleCell.appendChild(select);
   row.appendChild(roleCell);
 
-  // Created column placeholder (not required)
+  // Created column placeholder (not using created_at from DB)
   const createdCell = document.createElement("td");
-  createdCell.textContent = "-"; // ✅ avoids needing created_at column
+  createdCell.textContent = "-";
   row.appendChild(createdCell);
 
   // Delete button
@@ -94,20 +128,28 @@ function addUserRow(user) {
   tbody.appendChild(row);
 }
 
-// ✅ Create new User → inserts email + role into mapping table
-async function createUser() {
+// ------------------------------------------------------
+// Handle create user form submit
+// (inserts email + role into mapping table only)
+// ------------------------------------------------------
+async function handleCreateUserSubmit() {
   const emailInput = document.getElementById("new-user-email");
   const roleSelect = document.getElementById("new-user-role");
-  const statusEl = document.getElementById("user-status");
+
+  if (!emailInput || !roleSelect) {
+    console.warn("Create user inputs not found in DOM.");
+    return;
+  }
 
   const email = emailInput.value.trim().toLowerCase();
   const role = roleSelect.value;
 
   if (!email) {
-    statusEl.textContent = "Email is required.";
-    statusEl.classList.add("error");
+    setUserStatus("Email is required.", "error");
     return;
   }
+
+  setUserStatus("Saving user mapping…", "info");
 
   const { error } = await supabase
     .from("users")
@@ -115,22 +157,25 @@ async function createUser() {
 
   if (error) {
     console.error("Error creating user:", error);
-    statusEl.textContent = "Error creating user: " + error.message;
-    statusEl.classList.add("error");
+    setUserStatus("Error creating user mapping: " + error.message, "error");
     return;
   }
 
-  statusEl.textContent = "User added successfully!";
-  statusEl.classList.remove("error");
-  statusEl.classList.add("success");
+  setUserStatus(
+    "User mapping added! Remember: create the login in Supabase Auth as well.",
+    "success"
+  );
 
   emailInput.value = "";
   await loadUsersTable();
 }
 
-// ✅ Update role
+// ------------------------------------------------------
+// Update role for existing user mapping
+// ------------------------------------------------------
 async function updateUserRole(id, newRole) {
-  const statusEl = document.getElementById("user-status");
+  if (!id) return;
+  setUserStatus("Updating role…", "info");
 
   const { error } = await supabase
     .from("users")
@@ -139,21 +184,21 @@ async function updateUserRole(id, newRole) {
 
   if (error) {
     console.error("Error updating role:", error);
-    statusEl.textContent = "Error updating role: " + error.message;
-    statusEl.classList.add("error");
+    setUserStatus("Error updating role: " + error.message, "error");
     return;
   }
 
-  statusEl.textContent = "Role updated!";
-  statusEl.classList.remove("error");
-  statusEl.classList.add("success");
-
+  setUserStatus("Role updated!", "success");
   await loadUsersTable();
 }
 
-// ✅ Delete user mapping
+// ------------------------------------------------------
+// Delete a user mapping (does NOT delete Auth user)
+// ------------------------------------------------------
 async function deleteUser(id) {
-  const statusEl = document.getElementById("user-status");
+  if (!id) return;
+
+  setUserStatus("Removing user mapping…", "info");
 
   const { error } = await supabase
     .from("users")
@@ -162,17 +207,14 @@ async function deleteUser(id) {
 
   if (error) {
     console.error("Error deleting user mapping:", error);
-    statusEl.textContent = "Error deleting user: " + error.message;
-    statusEl.classList.add("error");
+    setUserStatus("Error deleting user: " + error.message, "error");
     return;
   }
 
-  statusEl.textContent = "User removed!";
-  statusEl.classList.remove("error");
-  statusEl.classList.add("success");
-
+  setUserStatus("User mapping removed!", "success");
   await loadUsersTable();
 }
+
 
 
 
