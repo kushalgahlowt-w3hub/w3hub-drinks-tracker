@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>w3.hub – Runner Mode</title>
+
+    <!-- Global styles -->
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Mobile-specific + table scroll styles (safe, page-local) -->
+    <style>
+        /* Container for horizontally scrollable tables */
+        .table-scroll {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        .table-scroll table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 700px; /* forces horizontal scroll on small screens */
+        }
+
+        /* Mobile top bar */
+        .mobile-topbar {
+            display: none; /* hidden by default, shown on small screens */
+        }
+
+        @media (max-width: 768px) {
+            .layout {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                display: flex;
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-between;
+                padding: 10px 14px;
+                overflow-x: auto;
+            }
+
+            .sidebar-nav {
+                display: flex;
+                gap: 12px;
+            }
+
+            .sidebar-footer {
+                display: none; /* we add logout in the topbar instead */
+            }
+
+            .content {
+                padding: 12px;
+            }
+
+            .mobile-topbar {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 10px 14px;
+                background: #050609;
+                border-bottom: 1px solid #22242d;
+                position: sticky;
+                top: 0;
+                z-index: 1000;
+            }
+
+            .mobile-topbar-left {
+                display: flex;
+                flex-direction: column;
+                font-size: 12px;
+                color: #c3c6cf;
+            }
+
+            .mobile-topbar-left .mobile-username {
+                font-weight: 600;
+                font-size: 13px;
+                color: #ffffff;
+            }
+
+            .mobile-logout-btn {
+                padding: 6px 10px;
+                border-radius: 999px;
+                border: 1px solid #2a2d35;
+                background: #11141d;
+                color: #e9e9e9;
+                font-size: 12px;
+                cursor: pointer;
+            }
+
+            .mobile-logout-btn:hover {
+                background: #181b25;
+            }
+        }
+
+        /* Small utility style for buttons inside tables */
+        .table-action-btn {
+            padding: 4px 8px;
+            font-size: 11px;
+            border-radius: 6px;
+            border: 1px solid #2a2d35;
+            background: #11141d;
+            color: #e9e9e9;
+            cursor: pointer;
+            margin-right: 4px;
+        }
+
+        .table-action-btn.danger {
+            border-color: #703040;
+            background: #2a1016;
+            color: #ffb3c0;
+        }
+
+        .table-action-btn:hover {
+            background: #181b25;
+        }
+
+        .table-action-btn.danger:hover {
+            background: #3a1820;
+        }
+    </style>
+
+    <!-- Supabase client library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- Global Auth Handler -->
+    <script defer src="auth.js"></script>
+</head>
+
+<body>
+<div class="layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div>
+            <div class="sidebar-logo">
+                <span class="logo-icon">w3</span><span class="logo-dot">.</span><span class="logo-text">hub</span>
+            </div>
+            <div class="sidebar-subtitle">Drinks Tracker • Internal tool</div>
+        </div>
+
+        <nav class="sidebar-nav">
+            <!-- Admin-only links -->
+            <a href="dashboard.html" data-role="admin-only">Setup · Events / Floors</a>
+            <a href="admin_reports.html" data-role="admin-only">Analytics Dashboard</a>
+            <a href="admin_users.html" data-role="admin-only">User Management</a>
+
+            <!-- Runner + Admin -->
+            <a href="runner.html" class="active">Runner Mode</a>
+            <!-- My Activity will scroll on this same page to a section -->
+            <a href="#my-activity-section" data-role="runner-only">My Activity</a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <p>Property of w3.hub<br>Internal use only</p>
+            <button onclick="logoutUser()" class="logout-btn">Logout</button>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="content">
+
+        <!-- MOBILE TOPBAR (shown on small screens only) -->
+        <div class="mobile-topbar">
+            <div class="mobile-topbar-left">
+                <span>Welcome,</span>
+                <span id="mobile-username" class="mobile-username">–</span>
+            </div>
+            <button type="button" class="mobile-logout-btn" onclick="logoutUser()">Logout</button>
+        </div>
+
+        <div class="page-card">
+
+            <h1>Runner: Update Counts</h1>
+            <p class="page-description">
+                Start → Restock → End counts for each fridge.
+            </p>
+
+            <!-- SUPABASE CLIENT INITIALIZATION -->
+            <script>
+                const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
+                const SUPABASE_ANON_KEY =
+                    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
+
+                const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            </script>
+
+            <!-- RUNNER FORM -->
+            <form id="log-form" class="runner-form">
+
+                <!-- EVENT -->
+                <label for="event-select">Event</label>
+                <select id="event-select" required></select>
+
+                <!-- FLOOR -->
+                <label for="floor-select">Floor</label>
+                <select id="floor-select" required></select>
+
+                <!-- FRIDGE -->
+                <label for="fridge-select">Fridge</label>
+                <select id="fridge-select" required></select>
+
+                <!-- DRINK -->
+                <label for="drink-select">Drink</label>
+                <select id="drink-select" required></select>
+
+                <!-- ACTION -->
+                <label>Action</label>
+                <div class="mode-toggle">
+                    <label><input type="radio" name="mode" value="start" checked> Start Count</label>
+                    <label><input type="radio" name="mode" value="restock"> Restock</label>
+                    <label><input type="radio" name="mode" value="end"> End Count</label>
+                </div>
+
+                <!-- START -->
+                <div class="count-block" id="start-block">
+                    <label for="start-count">Start Count</label>
+                    <input type="number" id="start-count" min="0">
+                </div>
+
+                <!-- RESTOCK -->
+                <div class="count-block" id="restock-block" style="display:none;">
+                    <label for="restock-count">Restock Amount</label>
+                    <input type="number" id="restock-count" min="0">
+                </div>
+
+                <!-- END -->
+                <div class="count-block" id="end-block" style="display:none;">
+                    <label for="end-count">End Count</label>
+                    <input type="number" id="end-count" min="0">
+                </div>
+
+                <button type="submit" class="btn-primary">Submit</button>
+
+                <p id="log-status" class="status-text"></p>
+            </form>
+
+            <hr class="divider">
+
+            <!-- HISTORY FOR CURRENT SELECTION -->
+            <h2>Recent History (This Event / Fridge / Drink)</h2>
+            <p class="page-description">Last 10 updates for the selected event, fridge, and drink.</p>
+
+            <div class="table-scroll">
+                <table class="history-table">
+                    <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Action</th>
+                        <th>Amount</th>
+                    </tr>
+                    </thead>
+                    <tbody id="history-body"></tbody>
+                </table>
+            </div>
+
+            <hr class="divider">
+
+            <!-- MY ACTIVITY SECTION -->
+            <section id="my-activity-section">
+                <h2>My Activity (Last 15 Logs)</h2>
+                <p class="page-description">
+                    Your most recent 15 submissions across all events and fridges.
+                    You can edit or delete them while the event is still active.
+                </p>
+
+                <div class="table-scroll">
+                    <table class="history-table">
+                        <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Event</th>
+                            <th>Floor</th>
+                            <th>Fridge</th>
+                            <th>Drink</th>
+                            <th>Action</th>
+                            <th>Amount</th>
+                            <th>Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody id="my-activity-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+</div>
+
+<!-- RUNNER LOGIC -->
+<script defer src="runner.js"></script>
+
+<!-- MODE BLOCK SWITCHING -->
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const radios = document.querySelectorAll("input[name='mode']");
+        const s = document.getElementById("start-block");
+        const r = document.getElementById("restock-block");
+        const e = document.getElementById("end-block");
+
+        function updateBlocks() {
+            const mode = document.querySelector("input[name='mode']:checked").value;
+            s.style.display = mode === "start" ? "block" : "none";
+            r.style.display = mode === "restock" ? "block" : "none";
+            e.style.display = mode === "end" ? "block" : "none";
+        }
+
+        radios.forEach(x => x.addEventListener("change", updateBlocks));
+        updateBlocks();
+    });
+</script>
+
+</body>
+</html>
