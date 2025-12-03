@@ -1,171 +1,284 @@
-// dashboard.js
-// Admin setup logic (events, floors, fridges, drink types)
+/* ----------------------------------------------------------
+   dashboard.js — FINAL VERSION (Safe for Production)
+   Features added:
+   ✔ Add Event (with owned_by + owned_by_other)
+   ✔ List Events (name, date, owner, status)
+   ✔ Close Event (soft-lock)
+   ✔ Add Floors
+   ✔ Add Fridges
+   ✔ Add Drink Types
+----------------------------------------------------------- */
 
-async function loadFloors() {
-  const { data, error } = await supabase.from("floors").select("*");
-  const dropdown = document.getElementById("fridge-floor");
-  dropdown.innerHTML = "";
-  if (error) return;
-
-  data.forEach(f =>
-    dropdown.innerHTML += `<option value="${f.id}">${f.name}</option>`
-  );
-}
-
-loadFloors();
-
-/* -------------------------
-   ADD EVENT
-------------------------- */
-document.getElementById("event-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-
-  const name = document.getElementById("event-name").value;
-  const event_date = document.getElementById("event-date").value;
-
-  const owned_by = document.getElementById("event-owned-by").value;
-  const owned_by_other = document.getElementById("event-owned-by-other").value;
-
-  const finalOwner = owned_by === "Other" ? owned_by_other : owned_by;
-
-  const { error } = await supabase.from("events").insert([
-    {
-      name,
-      event_date,
-      owned_by: finalOwner,
-      status: "open"
-    }
-  ]);
-
-  const status = document.getElementById("event-status");
-  if (error) {
-    status.textContent = "❌ Error adding event";
-    return;
-  }
-
-  status.textContent = "✅ Event added!";
-  document.getElementById("event-form").reset();
-  loadEventList();
+document.addEventListener("DOMContentLoaded", () => {
+    initDashboard().catch(err => {
+        console.error("Dashboard init error:", err);
+    });
 });
 
-/* -------------------------
-   EVENT LIST (NEW)
-------------------------- */
-async function loadEventList() {
-  const container = document.getElementById("event-list");
-  container.innerHTML = "";
+/* ----------------------------------------------------------
+   INITIALISATION
+----------------------------------------------------------- */
+async function initDashboard() {
+    await loadFloorsDropdown();
+    await loadEventsList();
 
-  const { data, error } = await supabase
-    .from("events")
-    .select("*")
-    .order("event_date", { ascending: true });
+    // Attach form handlers
+    document.getElementById("event-form")?.addEventListener("submit", handleCreateEvent);
+    document.getElementById("floor-form")?.addEventListener("submit", handleCreateFloor);
+    document.getElementById("fridge-form")?.addEventListener("submit", handleCreateFridge);
+    document.getElementById("drink-type-form")?.addEventListener("submit", handleCreateDrinkType);
 
-  if (error || !data) {
-    container.innerHTML = "<p>Error loading events.</p>";
-    return;
-  }
+    // Show "Other owner" textbox
+    const ownedSelect = document.getElementById("event-owned-by");
+    const ownedOther = document.getElementById("event-owned-by-other");
+    if (ownedSelect && ownedOther) {
+        ownedSelect.addEventListener("change", () => {
+            ownedOther.style.display = ownedSelect.value === "Other" ? "block" : "none";
+        });
+    }
+}
 
-  data.forEach(evt => {
-    const card = document.createElement("div");
-    card.className = "event-card";
+/* ----------------------------------------------------------
+   1) CREATE EVENT
+----------------------------------------------------------- */
+async function handleCreateEvent(e) {
+    e.preventDefault();
 
-    const statusClass = evt.status === "open"
-      ? "event-status-open"
-      : "event-status-closed";
+    const name = document.getElementById("event-name").value.trim();
+    const date = document.getElementById("event-date").value;
+    const ownedBy = document.getElementById("event-owned-by").value;
+    const ownedByOther = document.getElementById("event-owned-by-other").value.trim();
 
-    card.innerHTML = `
-      <strong>${evt.name}</strong><br>
-      Owner: ${evt.owned_by || "-"}<br>
-      Status:
-      <span class="${statusClass}">
-        ${evt.status}
-      </span>
-      <br>
-    `;
+    const statusEl = document.getElementById("event-status");
+    statusEl.textContent = "";
 
-    // Add Close button if open
-    if (evt.status === "open") {
-      const btn = document.createElement("button");
-      btn.textContent = "Close Event";
-      btn.className = "close-btn";
-      btn.onclick = () => closeEvent(evt.id);
-      card.appendChild(btn);
-    } else {
-      const closedBadge = document.createElement("div");
-      closedBadge.textContent = "Closed";
-      closedBadge.style = "margin-top:6px;color:#777;font-weight:bold;";
-      card.appendChild(closedBadge);
+    if (!name || !date) {
+        statusEl.textContent = "❌ Name and date are required.";
+        statusEl.classList.add("error");
+        return;
     }
 
-    container.appendChild(card);
-  });
+    let finalOwner = ownedBy;
+    if (ownedBy === "Other") {
+        if (!ownedByOther) {
+            statusEl.textContent = "❌ Please specify owner.";
+            statusEl.classList.add("error");
+            return;
+        }
+        finalOwner = ownedByOther;
+    }
+
+    const { error } = await supabase
+        .from("events")
+        .insert([{
+            name,
+            event_date: date,
+            owned_by: finalOwner,
+            status: "open"     // Default
+        }]);
+
+    if (error) {
+        console.error("Create event error:", error);
+        statusEl.textContent = "❌ Error creating event.";
+        statusEl.classList.add("error");
+        return;
+    }
+
+    statusEl.textContent = "✅ Event added!";
+    statusEl.classList.add("success");
+
+    document.getElementById("event-form").reset();
+    document.getElementById("event-owned-by-other").style.display = "none";
+
+    await loadEventsList();
 }
 
-async function closeEvent(id) {
-  await supabase.from("events").update({ status: "closed" }).eq("id", id);
-  loadEventList();
+/* ----------------------------------------------------------
+   2) LOAD EVENTS LIST (with Close Event button)
+----------------------------------------------------------- */
+async function loadEventsList() {
+    const container = document.getElementById("events-list");
+    if (!container) return;
+
+    container.innerHTML = "<p>Loading events...</p>";
+
+    const { data, error } = await supabase
+        .from("events")
+        .select("*")
+        .order("event_date", { ascending: false });
+
+    if (error || !data) {
+        container.innerHTML = "<p>Error loading events.</p>";
+        console.error(error);
+        return;
+    }
+
+    if (data.length === 0) {
+        container.innerHTML = "<p>No events found.</p>";
+        return;
+    }
+
+    container.innerHTML = "";
+
+    data.forEach(ev => {
+        const wrap = document.createElement("div");
+        wrap.className = "event-card";
+
+        const statusClass = ev.status === "closed" ? "event-status-closed" : "event-status-open";
+        const statusLabel = ev.status === "closed" ? "CLOSED" : "OPEN";
+
+        wrap.innerHTML = `
+            <div class="event-header">
+                <strong>${ev.name}</strong>
+                <span class="${statusClass}">${statusLabel}</span>
+            </div>
+            <p>Date: ${ev.event_date}</p>
+            <p>Owned By: <strong>${ev.owned_by || "Unknown"}</strong></p>
+            ${
+                ev.status === "open"
+                ? `<button class="close-btn" onclick="closeEvent(${ev.id})">Close Event</button>`
+                : `<div class="closed-tag">Event Locked</div>`
+            }
+        `;
+
+        container.appendChild(wrap);
+    });
 }
 
-/* -------------------------
-   ADD FLOOR
-------------------------- */
-document.getElementById("floor-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const name = document.getElementById("floor-name").value;
-  const status = document.getElementById("floor-status");
+/* ----------------------------------------------------------
+   3) CLOSE EVENT (Soft Lock)
+----------------------------------------------------------- */
+async function closeEvent(eventId) {
+    const ok = confirm("Are you sure? Closing an event will disable edits & deletions.");
+    if (!ok) return;
 
-  const { error } = await supabase.from("floors").insert([{ name }]);
-  if (error) {
-    status.textContent = "❌ Error adding floor";
-    return;
-  }
+    const { error } = await supabase
+        .from("events")
+        .update({ status: "closed" })
+        .eq("id", eventId);
 
-  status.textContent = "✅ Floor added!";
-  document.getElementById("floor-form").reset();
-  loadFloors();
-});
+    if (error) {
+        console.error("Close event error:", error);
+        alert("❌ Error closing event.");
+        return;
+    }
 
-/* -------------------------
-   ADD FRIDGE
-------------------------- */
-document.getElementById("fridge-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const name = document.getElementById("fridge-name").value;
-  const floor_id = document.getElementById("fridge-floor").value;
-  const status = document.getElementById("fridge-status");
+    await loadEventsList();
+}
 
-  const { error } = await supabase.from("fridges").insert([{ name, floor_id }]);
-  if (error) {
-    status.textContent = "❌ Error adding fridge";
-    return;
-  }
+/* ----------------------------------------------------------
+   4) ADD FLOOR
+----------------------------------------------------------- */
+async function handleCreateFloor(e) {
+    e.preventDefault();
+    const name = document.getElementById("floor-name").value.trim();
+    const statusEl = document.getElementById("floor-status");
 
-  status.textContent = "✅ Fridge added!";
-  document.getElementById("fridge-form").reset();
-});
+    if (!name) {
+        statusEl.textContent = "❌ Floor name required.";
+        statusEl.classList.add("error");
+        return;
+    }
 
-/* -------------------------
-   ADD DRINK TYPE
-------------------------- */
-document.getElementById("drink-type-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const name = document.getElementById("drink-type-name").value;
-  const status = document.getElementById("drink-type-status");
+    const { error } = await supabase
+        .from("floors")
+        .insert([{ name }]);
 
-  const { error } = await supabase.from("drink_types").insert([{ name }]);
-  if (error) {
-    status.textContent = "❌ Error adding drink type";
-    return;
-  }
+    if (error) {
+        console.error("Floor error:", error);
+        statusEl.textContent = "❌ Error adding floor.";
+        statusEl.classList.add("error");
+        return;
+    }
 
-  status.textContent = "✅ Drink type added!";
-  document.getElementById("drink-type-form").reset();
-});
+    statusEl.textContent = "✅ Floor added!";
+    statusEl.classList.add("success");
 
-/* -------------------------  
-   INITIAL LOAD  
-------------------------- */
-document.addEventListener("DOMContentLoaded", loadEventList);
+    document.getElementById("floor-form").reset();
+    await loadFloorsDropdown();
+}
+
+/* ----------------------------------------------------------
+   5) FLOORS DROPDOWN FOR FRIDGES
+----------------------------------------------------------- */
+async function loadFloorsDropdown() {
+    const el = document.getElementById("fridge-floor");
+    if (!el) return;
+
+    const { data, error } = await supabase.from("floors").select("*");
+
+    if (error || !data) {
+        el.innerHTML = "<option>Error loading floors</option>";
+        return;
+    }
+
+    el.innerHTML = data.map(f => `<option value="${f.id}">${f.name}</option>`).join("");
+}
+
+/* ----------------------------------------------------------
+   6) ADD FRIDGE
+----------------------------------------------------------- */
+async function handleCreateFridge(e) {
+    e.preventDefault();
+
+    const name = document.getElementById("fridge-name").value.trim();
+    const floor = document.getElementById("fridge-floor").value;
+    const statusEl = document.getElementById("fridge-status");
+
+    if (!name || !floor) {
+        statusEl.textContent = "❌ Fridge name & floor are required.";
+        statusEl.classList.add("error");
+        return;
+    }
+
+    const { error } = await supabase
+        .from("fridges")
+        .insert([{ name, floor_id: floor }]);
+
+    if (error) {
+        console.error(error);
+        statusEl.textContent = "❌ Error adding fridge.";
+        statusEl.classList.add("error");
+        return;
+    }
+
+    statusEl.textContent = "✅ Fridge added!";
+    statusEl.classList.add("success");
+
+    document.getElementById("fridge-form").reset();
+}
+
+/* ----------------------------------------------------------
+   7) ADD DRINK TYPE
+----------------------------------------------------------- */
+async function handleCreateDrinkType(e) {
+    e.preventDefault();
+    const name = document.getElementById("drink-type-name").value.trim();
+    const statusEl = document.getElementById("drink-type-status");
+
+    if (!name) {
+        statusEl.textContent = "❌ Drink name required.";
+        statusEl.classList.add("error");
+        return;
+    }
+
+    const { error } = await supabase
+        .from("drink_types")
+        .insert([{ name }]);
+
+    if (error) {
+        console.error(error);
+        statusEl.textContent = "❌ Error adding drink type.";
+        statusEl.classList.add("error");
+        return;
+    }
+
+    statusEl.textContent = "✅ Drink type added!";
+    statusEl.classList.add("success");
+
+    document.getElementById("drink-type-form").reset();
+}
+
 
 
 
