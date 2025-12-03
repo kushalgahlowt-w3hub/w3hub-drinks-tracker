@@ -49,104 +49,66 @@
       font-size: 16px;
     }
 
-    .sidebar-logo-dot {
-      color: #4ccbff;
-      font-size: 18px;
-      text-shadow: 0 0 6px rgba(76,203,255,0.7);
-    }
+    .sidebar-logo-dot { color:#4ccbff; font-size:18px; text-shadow:0 0 6px rgba(76,203,255,0.7);}
+    .sidebar-logo-hub {color:#b8ffb5;font-weight:700;font-size:18px;text-shadow:0 0 8px rgba(184,255,181,0.7);}
+    .sidebar-tagline {font-size:11px;color:#8c8f94;margin-top:4px;}
 
-    .sidebar-logo-hub {
-      color: #b8ffb5;
-      font-weight: 700;
-      font-size: 18px;
-      text-shadow: 0 0 8px rgba(184,255,181,0.7);
-    }
-
-    .sidebar-tagline {
-      font-size: 11px;
-      color: #8c8f94;
-      margin-top: 4px;
-    }
-
-    .nav-links {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
+    .nav-links {display:flex;flex-direction:column;gap:4px;}
     .nav-link {
-      font-size: 13px;
-      color: #c3c6cf;
-      text-decoration: none;
-      padding: 7px 8px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      border: 1px solid transparent;
+      font-size:13px;color:#c3c6cf;text-decoration:none;padding:7px 8px;
+      border-radius:8px;display:flex;align-items:center;gap:6px;border:1px solid transparent;
+    }
+    .nav-link:hover {background:rgba(255,255,255,0.04);border-color:#22242d;}
+    .nav-link-active {
+      background:linear-gradient(90deg,rgba(76,203,255,0.18),rgba(184,255,181,0.12));
+      border-color:#2f93ff;color:#ffffff;
     }
 
-    .nav-link-active {
-      background: linear-gradient(90deg, rgba(76,203,255,0.18), rgba(184,255,181,0.12));
-      border-color: #2f93ff;
-      color: #ffffff;
+    .sidebar-footer {margin-top:auto;font-size:11px;color:#6d717b;}
+    .logout-btn {
+      width:100%;margin-top:8px;padding:7px 10px;border-radius:8px;
+      border:1px solid #2a2d35;background:none;color:#c3c6cf;font-size:12px;cursor:pointer;
     }
+    .logout-btn:hover {background:rgba(255,255,255,0.04);}
 
     .main-content {
-      flex: 1;
-      padding: 18px 22px 32px;
-      display: flex;
-      justify-content: center;
+      flex:1;padding:18px 22px 32px;
+      display:flex;justify-content:center;
     }
 
     .card {
-      width: 100%;
-      max-width: 780px;
-      background: rgba(15,17,25,0.97);
-      border-radius: 18px;
-      border: 1px solid #262937;
-      padding: 20px 22px 24px;
-    }
-
-    .close-btn {
-      background: #ff3b3b;
-      color: #fff;
-      padding: 6px 10px;
-      margin-top: 6px;
-      border-radius: 6px;
-      border: none;
-      cursor: pointer;
-      width: 120px;
-    }
-
-    .close-btn:disabled {
-      background: #444;
-      cursor: not-allowed;
+      width:100%;max-width:780px;background:rgba(15,17,25,0.97);
+      border-radius:18px;border:1px solid #262937;
+      box-shadow:0 24px 80px rgba(0,0,0,0.9),0 0 0 1px rgba(255,255,255,0.03);
+      padding:20px 22px 24px;
     }
 
     .event-card {
-      border: 1px solid #2a2d35;
-      border-radius: 12px;
-      padding: 12px 14px;
-      margin-top: 10px;
-      background: #0f1117;
+      background:#0e1118;border:1px solid #2a2d35;border-radius:10px;padding:12px;
+      margin-top:10px;
     }
+    .event-header {display:flex;justify-content:space-between;align-items:center;}
+    .event-status-open {color:#b8ffb5;}
+    .event-status-closed {color:#ff6b6b;}
 
-    .event-status-open {
-      color: #b8ffb5;
-      font-weight: bold;
+    .close-btn {
+      background:#ff4d4d;border:none;color:white;padding:5px 10px;
+      border-radius:6px;cursor:pointer;font-size:12px;
     }
-    .event-status-closed {
-      color: #ff6f6f;
-      font-weight: bold;
+    .close-btn:hover {background:#ff3333;}
+
+    .closed-tag {
+      background:#444;padding:5px 12px;border-radius:6px;font-size:12px;color:#ccc;
     }
 
   </style>
 </head>
 
 <body data-role="admin">
+
 <div class="app-shell">
 
+  <!-- SIDEBAR -->
   <aside class="sidebar" data-role="admin-only">
     <div>
       <div class="sidebar-logo">
@@ -171,6 +133,7 @@
     </div>
   </aside>
 
+  <!-- MAIN CONTENT -->
   <main class="main-content">
     <div class="card">
 
@@ -179,7 +142,7 @@
 
       <hr class="section-divider">
 
-      <!-- EVENTS -->
+      <!-- ADD EVENT -->
       <section>
         <h2>📅 Add Event</h2>
         <form id="event-form">
@@ -197,8 +160,7 @@
             <option value="Other">Other — Specify</option>
           </select>
 
-          <input type="text" id="event-owned-by-other"
-                 placeholder="Specify owner" style="display:none;margin-top:6px;"/>
+          <input type="text" id="event-owned-by-other" placeholder="Specify owner" style="display:none;margin-top:6px;"/>
 
           <button type="submit">Add Event</button>
         </form>
@@ -207,10 +169,10 @@
 
       <hr class="section-divider">
 
-      <!-- EVENT LIST (NEW) -->
+      <!-- EVENT LIST -->
       <section>
-        <h2>📋 Event List</h2>
-        <div id="event-list"></div>
+        <h2>📋 Events List</h2>
+        <div id="events-list"></div>
       </section>
 
       <hr class="section-divider">
@@ -219,7 +181,7 @@
       <section>
         <h2>🏢 Add Floor</h2>
         <form id="floor-form">
-          <label for="floor-name">Floor Name (e.g. 3F, Basement)</label>
+          <label for="floor-name">Floor Name</label>
           <input type="text" id="floor-name" required>
           <button type="submit">Add Floor</button>
         </form>
@@ -232,7 +194,7 @@
       <section>
         <h2>🧊 Add Fridge</h2>
         <form id="fridge-form">
-          <label for="fridge-name">Fridge Name (e.g. 4F1)</label>
+          <label for="fridge-name">Fridge Name</label>
           <input type="text" id="fridge-name" required>
 
           <label for="fridge-floor">Floor</label>
@@ -249,30 +211,37 @@
       <section>
         <h2>🥤 Add Drink Type</h2>
         <form id="drink-type-form">
-          <label for="drink-type-name">Drink Type (e.g. Water, Beer)</label>
+          <label for="drink-type-name">Drink Type</label>
           <input type="text" id="drink-type-name" required>
-          <button type="submit">Add Drink Type</button>
+          <button>Add Type</button>
         </form>
         <p id="drink-type-status" class="status"></p>
       </section>
 
     </div>
   </main>
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <script>
   const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
   const SUPABASE_ANON_KEY =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
 
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const supabase = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY
+  );
 </script>
+
 <script defer src="auth.js"></script>
 <script defer src="dashboard.js"></script>
 
 </body>
 </html>
+
 
 
 
