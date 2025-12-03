@@ -1,204 +1,161 @@
-// ------------------------------
-// Admin Reports JS (Updated)
-// ------------------------------
+// dashboard.js
+// NOTE: Supabase client is already initialized in dashboard.html
 
-console.log("%cadmin_reports.js loaded", "color:#4caf50;font-weight:bold;");
-
-// Supabase
-const SUPABASE_URL = "https://trcnszlkdunbbybdyjag.supabase.co";
-const SUPABASE_ANON_KEY =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY25zemxrZHVuYmJ5YmR5amFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzODM4MTYsImV4cCI6MjA3ODk1OTgxNn0.wCAAHfsBOeU6rp4v_7JhdMI9NlucX1cT1_3GTZ0GR8M";
-
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// DOM
-const eventCheckboxesContainer = document.getElementById("event-checkboxes");
-const applyEventFilterBtn = document.getElementById("apply-event-filter");
-const eventStatusBox = document.getElementById("event-status-box");
-
-// Active selected events
-let selectedEventIds = [];
-
-// ------------------------------
-// LOAD EVENTS FOR CHECKBOX LIST
-// ------------------------------
-async function loadEventCheckboxes() {
-    const { data, error } = await supabase
-        .from("events")
-        .select("*")
-        .order("event_date", { ascending: false });
+// -------------------------
+// LOAD FLOORS INTO DROPDOWN
+// -------------------------
+async function loadFloors() {
+    const { data, error } = await supabase.from("floors").select("*");
 
     if (error) {
-        console.error("Error loading events:", error);
+        console.error("❌ Error loading floors:", error);
         return;
     }
 
-    eventCheckboxesContainer.innerHTML = "";
+    const dropdown = document.getElementById("fridge-floor");
+    dropdown.innerHTML = "";
 
-    data.forEach(ev => {
-        const div = document.createElement("div");
-        div.className = "checkbox-item";
-
-        div.innerHTML = `
-            <label>
-                <input type="checkbox" value="${ev.id}">
-                ${ev.name} (${ev.status})
-            </label>
-        `;
-
-        eventCheckboxesContainer.appendChild(div);
+    data.forEach(floor => {
+        const option = document.createElement("option");
+        option.value = floor.id;
+        option.textContent = floor.name;
+        dropdown.appendChild(option);
     });
 }
 
-// ------------------------------
-// FETCH EVENT DETAILS FOR STATUS BOX
-// ------------------------------
-async function fetchEventMeta(eventId) {
-    const { data, error } = await supabase
-        .from("events")
-        .select("*")
-        .eq("id", eventId)
-        .single();
+loadFloors();
 
-    if (error) {
-        console.error("Error fetching event meta:", error);
-        return null;
+
+// -------------------------
+// ADD EVENT
+// -------------------------
+document.getElementById("event-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const name = document.getElementById("event-name").value;
+    const event_date = document.getElementById("event-date").value;
+    const owned_by = document.getElementById("event-owned-by").value;
+    const owned_by_other_input = document.getElementById("event-owned-by-other");
+
+    let owned_by_other = null;
+
+    if (owned_by === "Other") {
+        owned_by_other = owned_by_other_input.value.trim();
     }
-
-    return data;
-}
-
-// ------------------------------
-// RENDER EVENT STATUS BOX
-// ------------------------------
-async function renderEventStatusBox() {
-    if (selectedEventIds.length !== 1) {
-        eventStatusBox.style.display = "none";
-        return;
-    }
-
-    const evId = selectedEventIds[0];
-    const ev = await fetchEventMeta(evId);
-
-    if (!ev) return;
-
-    const isClosed = ev.status === "closed";
-
-    eventStatusBox.style.display = "block";
-    eventStatusBox.innerHTML = `
-        <div style="
-            background:#1e1e1e;
-            padding:15px;
-            border-radius:8px;
-            border:1px solid #333;
-        ">
-            <strong>Event:</strong> ${ev.name}<br>
-            <strong>Date:</strong> ${ev.event_date}<br>
-            <strong>Owned by:</strong> ${ev.owned_by}<br>
-            <strong>Status:</strong> 
-                <span style="color:${isClosed ? '#ff5252' : '#4caf50'};font-weight:bold;">
-                    ${isClosed ? "CLOSED 🔒" : "OPEN"}
-                </span>
-            <br><br>
-
-            ${
-                isClosed
-                    ? `<button id="reopen-event-btn" class="btn-primary" style="background:#2ecc71;">Re-open Event</button>`
-                    : `<button id="close-event-btn" class="btn-primary" style="background:#e53935;">Close Event</button>`
-            }
-        </div>
-    `;
-
-    // Attach event listeners
-    if (!isClosed) {
-        document
-            .getElementById("close-event-btn")
-            .addEventListener("click", () => closeEvent(evId));
-    } else {
-        document
-            .getElementById("reopen-event-btn")
-            .addEventListener("click", () => reopenEvent(evId));
-    }
-}
-
-// ------------------------------
-// CLOSE EVENT (Admin Only)
-// ------------------------------
-async function closeEvent(eventId) {
-    const confirmClose = confirm(
-        "Are you sure you want to CLOSE this event?\nRunners will no longer be able to edit/delete logs."
-    );
-
-    if (!confirmClose) return;
 
     const { error } = await supabase
         .from("events")
-        .update({ status: "closed" })
-        .eq("id", eventId);
+        .insert([{ name, event_date, owned_by, owned_by_other }]);
 
     if (error) {
-        alert("Error closing event.");
-        console.error(error);
+        console.error("❌ Error inserting event:", error);
+        document.getElementById("event-status").textContent = "❌ Error adding event";
+        document.getElementById("event-status").className = "error";
         return;
     }
 
-    await refreshAnalytics();
-}
+    document.getElementById("event-status").textContent = "✅ Event added!";
+    document.getElementById("event-status").className = "success";
 
-// ------------------------------
-// RE-OPEN EVENT
-// ------------------------------
-async function reopenEvent(eventId) {
-    const confirmOpen = confirm(
-        "Re-open this event?\nRunners will be able to edit/delete their logs again."
-    );
-
-    if (!confirmOpen) return;
-
-    const { error } = await supabase
-        .from("events")
-        .update({ status: "open" })
-        .eq("id", eventId);
-
-    if (error) {
-        alert("Error reopening.");
-        console.error(error);
-        return;
-    }
-
-    await refreshAnalytics();
-}
-
-// ------------------------------
-// APPLY EVENT FILTER
-// ------------------------------
-applyEventFilterBtn.addEventListener("click", async () => {
-    selectedEventIds = [
-        ...document.querySelectorAll(
-            "#event-checkboxes input[type='checkbox']:checked"
-        ),
-    ].map(c => c.value);
-
-    await refreshAnalytics();
+    document.getElementById("event-form").reset();
+    owned_by_other_input.style.display = "none";
 });
 
-// ------------------------------
-// FULL REFRESH (Status box + charts + table)
-// ------------------------------
-async function refreshAnalytics() {
-    await renderEventStatusBox();
-    await loadDrilldownTable();
-    await loadCharts();
-}
 
-// ------------------------------
-// (REMOVED FOR BREVITY) — YOUR EXISTING
-// loadDrilldownTable(), loadCharts(), CSV/PDF EXPORTS
-// They remain unchanged.
-// ------------------------------
+// -------------------------
+// SHOW OTHER INPUT IF NEEDED
+// -------------------------
+document.getElementById("event-owned-by").addEventListener("change", () => {
+    const dropdown = document.getElementById("event-owned-by");
+    const otherField = document.getElementById("event-owned-by-other");
 
-// INIT
-loadEventCheckboxes();
+    if (dropdown.value === "Other") {
+        otherField.style.display = "block";
+    } else {
+        otherField.style.display = "none";
+        otherField.value = "";
+    }
+});
+
+
+// -------------------------
+// ADD FLOOR
+// -------------------------
+document.getElementById("floor-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const name = document.getElementById("floor-name").value;
+
+    const { error } = await supabase
+        .from("floors")
+        .insert([{ name }]);
+
+    if (error) {
+        console.error("❌ Error inserting floor:", error);
+        document.getElementById("floor-status").textContent = "❌ Error adding floor";
+        document.getElementById("floor-status").className = "error";
+        return;
+    }
+
+    document.getElementById("floor-status").textContent = "✅ Floor added!";
+    document.getElementById("floor-status").className = "success";
+
+    document.getElementById("floor-form").reset();
+    loadFloors();
+});
+
+
+// -------------------------
+// ADD FRIDGE
+// -------------------------
+document.getElementById("fridge-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const name = document.getElementById("fridge-name").value;
+    const floor_id = document.getElementById("fridge-floor").value;
+
+    const { error } = await supabase
+        .from("fridges")
+        .insert([{ name, floor_id }]);
+
+    if (error) {
+        console.error("❌ Error inserting fridge:", error);
+        document.getElementById("fridge-status").textContent = "❌ Error adding fridge";
+        document.getElementById("fridge-status").className = "error";
+        return;
+    }
+
+    document.getElementById("fridge-status").textContent = "✅ Fridge added!";
+    document.getElementById("fridge-status").className = "success";
+
+    document.getElementById("fridge-form").reset();
+});
+
+
+// -------------------------
+// ADD DRINK TYPE
+// -------------------------
+document.getElementById("drink-type-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const name = document.getElementById("drink-type-name").value;
+
+    const { error } = await supabase
+        .from("drink_types")
+        .insert([{ name }]);
+
+    if (error) {
+        console.error("❌ Error inserting drink type:", error);
+        document.getElementById("drink-type-status").textContent = "❌ Error adding drink type";
+        document.getElementById("drink-type-status").className = "error";
+        return;
+    }
+
+    document.getElementById("drink-type-status").textContent = "✅ Drink type added!";
+    document.getElementById("drink-type-status").className = "success";
+
+    document.getElementById("drink-type-form").reset();
+});
 
 
 
