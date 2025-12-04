@@ -18,6 +18,48 @@
 
     <!-- Auth (route protection + logoutUser) -->
     <script defer src="auth.js"></script>
+
+    <!-- Small page-specific styling -->
+    <style>
+        /* Greyed-out, disabled closed events in the event list */
+        .event-checkbox-item.closed {
+            opacity: 0.55;
+        }
+
+        .event-checkbox-item.closed span.status-pill {
+            font-size: 11px;
+            margin-left: 4px;
+            padding: 1px 6px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .event-checkbox-item.open span.status-pill {
+            font-size: 11px;
+            margin-left: 4px;
+            padding: 1px 6px;
+            border-radius: 999px;
+            border: 1px solid rgba(184, 255, 181, 0.35);
+        }
+
+        .reopen-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+            align-items: center;
+        }
+
+        .reopen-row select {
+            min-width: 220px;
+        }
+
+        .event-legend {
+            font-size: 12px;
+            margin-top: 6px;
+            color: #9da2af;
+        }
+    </style>
 </head>
 
 <body>
@@ -89,14 +131,29 @@
                 <div id="event-checkboxes" class="event-checkboxes"></div>
                 <p id="events-status" class="status-text"></p>
 
+                <p class="event-legend">
+                    <strong>Legend:</strong>
+                    <span>Open events – normal</span> ·
+                    <span>Closed events – greyed and always included in analytics (runners cannot edit).</span>
+                </p>
+
                 <div style="display:flex; gap:12px; margin-top:10px; flex-wrap:wrap;">
                     <button id="apply-event-filter" class="btn-primary">
                         Apply Selection
                     </button>
 
-                    <!-- NEW: CLOSE SELECTED EVENTS BUTTON -->
-                    <button id="close-event-btn" class="btn-danger" style="display:none;">
+                    <!-- CLOSE OPEN EVENTS -->
+                    <button id="close-event-btn" class="btn-danger" type="button" style="display:none;">
                         Close Selected Events
+                    </button>
+                </div>
+
+                <!-- REOPEN CLOSED EVENT -->
+                <div id="reopen-event-wrapper" class="reopen-row" style="display:none;">
+                    <span style="font-size:13px;">Reopen closed event:</span>
+                    <select id="reopen-event-select"></select>
+                    <button id="reopen-event-btn" class="btn-secondary" type="button">
+                        Reopen Event
                     </button>
                 </div>
             </section>
@@ -172,6 +229,7 @@
 
 </body>
 </html>
+
 
 
 

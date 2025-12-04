@@ -1,6 +1,8 @@
 /* -------------------------------------------------------
-   w3.hub Admin Analytics – OWNED_BY + FIXED CONSUMPTION
-   + Close Selected Events (using events.status Open/Closed)
+   w3.hub Admin Analytics
+   - OWNED_BY + FIXED CONSUMPTION
+   - Close / Reopen Events (using events.status = 'Open'/'Closed')
+   - Closed events greyed & disabled (but always included in analytics)
 -------------------------------------------------------- */
 
 let eventsById = {};
@@ -26,16 +28,26 @@ document.addEventListener("DOMContentLoaded", () => {
 async function initAnalytics() {
     await loadLookups();
     buildEventCheckboxes();
-    updateCloseButtonVisibility(); // initial state
+    buildReopenDropdown();
+    updateCloseButtonVisibility();
 
-    document.getElementById("apply-event-filter")?.addEventListener("click", refreshAnalytics);
-    document.getElementById("export-csv-btn")?.addEventListener("click", exportCsv);
-    document.getElementById("download-pdf-btn")?.addEventListener("click", downloadPdf);
+    const applyBtn = document.getElementById("apply-event-filter");
+    if (applyBtn) {
+        applyBtn.addEventListener("click", refreshAnalytics);
+    }
 
     const closeBtn = document.getElementById("close-event-btn");
     if (closeBtn) {
         closeBtn.addEventListener("click", handleCloseSelectedEvents);
     }
+
+    const reopenBtn = document.getElementById("reopen-event-btn");
+    if (reopenBtn) {
+        reopenBtn.addEventListener("click", handleReopenEvent);
+    }
+
+    document.getElementById("export-csv-btn")?.addEventListener("click", exportCsv);
+    document.getElementById("download-pdf-btn")?.addEventListener("click", downloadPdf);
 
     addFilterPill();
 }
@@ -51,14 +63,16 @@ async function loadLookups() {
         supabase.from("drink_types").select("*")
     ]);
 
-    (events.data || []).forEach(e => eventsById[e.id] = e);
-    (floors.data || []).forEach(e => floorsById[e.id] = e);
-    (fridges.data || []).forEach(e => fridgesById[e.id] = e);
-    (drinks.data || []).forEach(e => drinksById[e.id] = e);
+    (events.data || []).forEach(e => { eventsById[e.id] = e; });
+    (floors.data || []).forEach(e => { floorsById[e.id] = e; });
+    (fridges.data || []).forEach(e => { fridgesById[e.id] = e; });
+    (drinks.data || []).forEach(e => { drinksById[e.id] = e; });
 }
 
 /* -------------------------------------------------------
    EVENT CHECKBOXES
+   - Show Open/Closed
+   - Closed events greyed + disabled, but pre-checked
 -------------------------------------------------------- */
 function buildEventCheckboxes() {
     const container = document.getElementById("event-checkboxes");
@@ -66,37 +80,58 @@ function buildEventCheckboxes() {
 
     container.innerHTML = "";
 
-    Object.values(eventsById)
-        .sort((a, b) => (a.event_date || "").localeCompare(b.event_date || ""))
-        .forEach(ev => {
-            const label = document.createElement("label");
-            label.className = "event-checkbox-item";
+    const allEvents = Object.values(eventsById)
+        .sort((a, b) => (a.event_date || "").localeCompare(b.event_date || ""));
 
-            const cb = document.createElement("input");
-            cb.type = "checkbox";
-            cb.value = ev.id;
-            cb.checked = true;
+    allEvents.forEach(ev => {
+        const status = (ev.status || "Open").trim();
+        const isClosed = status.toLowerCase() === "closed";
 
-            label.appendChild(cb);
-            label.appendChild(
-                document.createTextNode(
-                    ` ${ev.name}${ev.event_date ? " (" + ev.event_date + ")" : ""}`
-                )
-            );
+        const label = document.createElement("label");
+        label.className = "event-checkbox-item " + (isClosed ? "closed" : "open");
 
-            container.appendChild(label);
-        });
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.value = ev.id;
+        cb.checked = true;               // Always included by default
+        cb.disabled = isClosed;          // Closed events cannot be unchecked/selected
+
+        // Whenever user toggles open events, update Close button visibility
+        cb.addEventListener("change", updateCloseButtonVisibility);
+
+        const textSpan = document.createElement("span");
+        textSpan.textContent =
+            `${ev.name}${ev.event_date ? " (" + ev.event_date + ")" : ""}`;
+
+        const pill = document.createElement("span");
+        pill.className = "status-pill";
+        pill.textContent = isClosed ? "Closed" : "Open";
+
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(" "));
+        label.appendChild(textSpan);
+        label.appendChild(pill);
+
+        container.appendChild(label);
+    });
 
     updateCloseButtonVisibility();
 }
 
+/* Selected event IDs for analytics (includes closed if checked) */
 function getSelectedEventIds() {
-    return [...document.querySelectorAll("#event-checkboxes input:checked")].map(cb => cb.value);
+    const boxes = document.querySelectorAll("#event-checkboxes input[type='checkbox']");
+    const selected = [];
+    boxes.forEach(cb => {
+        if (cb.checked) {
+            selected.push(cb.value);
+        }
+    });
+    return selected;
 }
 
 /* -------------------------------------------------------
-   CLOSE SELECTED EVENTS BUTTON – VISIBILITY
-   (Show if AT LEAST ONE selected event is Open)
+   CLOSE / REOPEN BUTTON VISIBILITY
 -------------------------------------------------------- */
 function updateCloseButtonVisibility() {
     const closeBtn = document.getElementById("close-event-btn");
@@ -110,14 +145,51 @@ function updateCloseButtonVisibility() {
 
     const hasOpen = selected.some(id => {
         const ev = eventsById[id];
-        return ev && ev.status === "Open";
+        return ev && (ev.status || "Open").toLowerCase() === "open";
     });
 
     closeBtn.style.display = hasOpen ? "inline-block" : "none";
 }
 
 /* -------------------------------------------------------
-   HANDLE CLOSE SELECTED EVENTS
+   BUILD REOPEN DROPDOWN
+   - Lists only Closed events
+-------------------------------------------------------- */
+function buildReopenDropdown() {
+    const wrapper = document.getElementById("reopen-event-wrapper");
+    const select = document.getElementById("reopen-event-select");
+    if (!wrapper || !select) return;
+
+    select.innerHTML = "";
+
+    const closedEvents = Object.values(eventsById)
+        .filter(ev => (ev.status || "Open").toLowerCase() === "closed")
+        .sort((a, b) => (a.event_date || "").localeCompare(b.event_date || ""));
+
+    if (!closedEvents.length) {
+        wrapper.style.display = "none";
+        return;
+    }
+
+    // Placeholder
+    const optPlaceholder = document.createElement("option");
+    optPlaceholder.value = "";
+    optPlaceholder.textContent = "Select closed event…";
+    select.appendChild(optPlaceholder);
+
+    closedEvents.forEach(ev => {
+        const opt = document.createElement("option");
+        const dateLabel = ev.event_date ? ` (${ev.event_date})` : "";
+        opt.value = ev.id;
+        opt.textContent = `${ev.name}${dateLabel} · Closed`;
+        select.appendChild(opt);
+    });
+
+    wrapper.style.display = "flex";
+}
+
+/* -------------------------------------------------------
+   CLOSE SELECTED EVENTS
 -------------------------------------------------------- */
 async function handleCloseSelectedEvents() {
     const selected = getSelectedEventIds();
@@ -126,10 +198,9 @@ async function handleCloseSelectedEvents() {
         return;
     }
 
-    // Only close those which are currently Open
     const openIds = selected.filter(id => {
         const ev = eventsById[id];
-        return ev && ev.status === "Open";
+        return ev && (ev.status || "Open").toLowerCase() === "open";
     });
 
     if (!openIds.length) {
@@ -138,8 +209,8 @@ async function handleCloseSelectedEvents() {
     }
 
     const confirmClose = window.confirm(
-        `Are you sure you want to CLOSE ${openIds.length} event(s)?\n` +
-        "Runners will no longer be able to edit or delete logs for these events (assuming RLS is configured)."
+        `Are you sure you want to CLOSE ${openIds.length} event(s)?\n\n` +
+        "Runners will no longer be able to edit or delete logs for these events."
     );
     if (!confirmClose) return;
 
@@ -150,7 +221,7 @@ async function handleCloseSelectedEvents() {
 
     if (error) {
         console.error("Error closing events:", error);
-        alert("❌ Error closing events. Check console/logs.");
+        alert("❌ Error closing events. See console for details.");
         return;
     }
 
@@ -168,8 +239,60 @@ async function handleCloseSelectedEvents() {
         statusEl.classList.add("success");
     }
 
-    // Rebuild checkboxes & refresh analytics
+    // Rebuild UI
     buildEventCheckboxes();
+    buildReopenDropdown();
+    await refreshAnalytics();
+}
+
+/* -------------------------------------------------------
+   REOPEN A CLOSED EVENT
+-------------------------------------------------------- */
+async function handleReopenEvent() {
+    const select = document.getElementById("reopen-event-select");
+    if (!select) return;
+
+    const eventId = select.value;
+    if (!eventId) {
+        alert("Please select a closed event to reopen.");
+        return;
+    }
+
+    const ev = eventsById[eventId];
+    const label = ev
+        ? `${ev.name}${ev.event_date ? " (" + ev.event_date + ")" : ""}`
+        : "this event";
+
+    const confirmReopen = window.confirm(
+        `Reopen "${label}"?\n\nRunners will be able to edit/delete logs again (within RLS rules).`
+    );
+    if (!confirmReopen) return;
+
+    const { error } = await supabase
+        .from("events")
+        .update({ status: "Open" })
+        .eq("id", eventId);
+
+    if (error) {
+        console.error("Error reopening event:", error);
+        alert("❌ Error reopening event. See console for details.");
+        return;
+    }
+
+    // Update local cache
+    if (eventsById[eventId]) {
+        eventsById[eventId].status = "Open";
+    }
+
+    const statusEl = document.getElementById("events-status");
+    if (statusEl) {
+        statusEl.textContent = `✅ Reopened "${label}".`;
+        statusEl.classList.remove("error");
+        statusEl.classList.add("success");
+    }
+
+    buildEventCheckboxes();
+    buildReopenDropdown();
     await refreshAnalytics();
 }
 
@@ -208,7 +331,7 @@ async function refreshAnalytics() {
 }
 
 /* -------------------------------------------------------
-   AGGREGATION
+   AGGREGATION – start + restock − end
 -------------------------------------------------------- */
 function buildAggregatedRows(logs) {
     const map = {};
@@ -334,7 +457,9 @@ function buildPie(id, data, type) {
         data: { labels: Object.keys(data), datasets: [{ data: Object.values(data) }] },
         options: {
             onClick: (e, el) => handleChartClick(el, type, chart),
-            onHover: (e, el) => document.body.style.cursor = el.length ? "pointer" : "default"
+            onHover: (e, el) => {
+                document.body.style.cursor = el.length ? "pointer" : "default";
+            }
         }
     });
 
@@ -355,7 +480,9 @@ function buildBar(id, data, type) {
         options: {
             indexAxis: "y",
             onClick: (e, el) => handleChartClick(el, type, chart),
-            onHover: (e, el) => document.body.style.cursor = el.length ? "pointer" : "default"
+            onHover: (e, el) => {
+                document.body.style.cursor = el.length ? "pointer" : "default";
+            }
         }
     });
 
@@ -375,7 +502,9 @@ function buildLine(id, data, type) {
         data: { labels, datasets: [{ data: values, fill: false }] },
         options: {
             onClick: (e, el) => handleChartClick(el, type, chart),
-            onHover: (e, el) => document.body.style.cursor = el.length ? "pointer" : "default"
+            onHover: (e, el) => {
+                document.body.style.cursor = el.length ? "pointer" : "default";
+            }
         }
     });
 
@@ -383,7 +512,7 @@ function buildLine(id, data, type) {
 }
 
 /* -------------------------------------------------------
-   CHART CLICK
+   CHART CLICK & FILTERING
 -------------------------------------------------------- */
 function handleChartClick(elements, type, chart) {
     if (!elements.length) return;
@@ -396,7 +525,6 @@ function handleChartClick(elements, type, chart) {
     scrollToTable();
 }
 
-/* APPLY FILTERS */
 function applyFilters() {
     const filtered = aggregatedRows.filter(r => {
         if (activeFilters.drink && r.drink_name !== activeFilters.drink) return false;
@@ -577,6 +705,7 @@ function scrollToTable() {
         block: "start"
     });
 }
+
 
 
 
