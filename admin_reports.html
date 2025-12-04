@@ -85,11 +85,20 @@
             <!-- EVENT FILTER -->
             <section class="analytics-section">
                 <h2>1. Select Events</h2>
+
                 <div id="event-checkboxes" class="event-checkboxes"></div>
                 <p id="events-status" class="status-text"></p>
-                <button id="apply-event-filter" class="btn-primary" style="margin-top:10px;">
-                    Apply Selection
-                </button>
+
+                <div style="display:flex; gap:12px; margin-top:10px; flex-wrap:wrap;">
+                    <button id="apply-event-filter" class="btn-primary">
+                        Apply Selection
+                    </button>
+
+                    <!-- NEW: CLOSE SELECTED EVENTS BUTTON -->
+                    <button id="close-event-btn" class="btn-danger" style="display:none;">
+                        Close Selected Events
+                    </button>
+                </div>
             </section>
 
             <hr class="divider">
@@ -163,6 +172,7 @@
 
 </body>
 </html>
+
 
 
 
