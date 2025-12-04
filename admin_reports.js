@@ -1,5 +1,6 @@
 /* -------------------------------------------------------
    w3.hub Admin Analytics – OWNED_BY + FIXED CONSUMPTION
+   + Close Selected Events (using events.status Open/Closed)
 -------------------------------------------------------- */
 
 let eventsById = {};
@@ -25,10 +26,16 @@ document.addEventListener("DOMContentLoaded", () => {
 async function initAnalytics() {
     await loadLookups();
     buildEventCheckboxes();
+    updateCloseButtonVisibility(); // initial state
 
     document.getElementById("apply-event-filter")?.addEventListener("click", refreshAnalytics);
     document.getElementById("export-csv-btn")?.addEventListener("click", exportCsv);
     document.getElementById("download-pdf-btn")?.addEventListener("click", downloadPdf);
+
+    const closeBtn = document.getElementById("close-event-btn");
+    if (closeBtn) {
+        closeBtn.addEventListener("click", handleCloseSelectedEvents);
+    }
 
     addFilterPill();
 }
@@ -79,10 +86,91 @@ function buildEventCheckboxes() {
 
             container.appendChild(label);
         });
+
+    updateCloseButtonVisibility();
 }
 
 function getSelectedEventIds() {
     return [...document.querySelectorAll("#event-checkboxes input:checked")].map(cb => cb.value);
+}
+
+/* -------------------------------------------------------
+   CLOSE SELECTED EVENTS BUTTON – VISIBILITY
+   (Show if AT LEAST ONE selected event is Open)
+-------------------------------------------------------- */
+function updateCloseButtonVisibility() {
+    const closeBtn = document.getElementById("close-event-btn");
+    if (!closeBtn) return;
+
+    const selected = getSelectedEventIds();
+    if (!selected.length) {
+        closeBtn.style.display = "none";
+        return;
+    }
+
+    const hasOpen = selected.some(id => {
+        const ev = eventsById[id];
+        return ev && ev.status === "Open";
+    });
+
+    closeBtn.style.display = hasOpen ? "inline-block" : "none";
+}
+
+/* -------------------------------------------------------
+   HANDLE CLOSE SELECTED EVENTS
+-------------------------------------------------------- */
+async function handleCloseSelectedEvents() {
+    const selected = getSelectedEventIds();
+    if (!selected.length) {
+        alert("Please select at least one event.");
+        return;
+    }
+
+    // Only close those which are currently Open
+    const openIds = selected.filter(id => {
+        const ev = eventsById[id];
+        return ev && ev.status === "Open";
+    });
+
+    if (!openIds.length) {
+        alert("All selected events are already Closed.");
+        return;
+    }
+
+    const confirmClose = window.confirm(
+        `Are you sure you want to CLOSE ${openIds.length} event(s)?\n` +
+        "Runners will no longer be able to edit or delete logs for these events (assuming RLS is configured)."
+    );
+    if (!confirmClose) return;
+
+    const { error } = await supabase
+        .from("events")
+        .update({ status: "Closed" })
+        .in("id", openIds);
+
+    if (error) {
+        console.error("Error closing events:", error);
+        alert("❌ Error closing events. Check console/logs.");
+        return;
+    }
+
+    // Update local cache
+    openIds.forEach(id => {
+        if (eventsById[id]) {
+            eventsById[id].status = "Closed";
+        }
+    });
+
+    const statusEl = document.getElementById("events-status");
+    if (statusEl) {
+        statusEl.textContent = `✅ Closed ${openIds.length} event(s).`;
+        statusEl.classList.remove("error");
+        statusEl.classList.add("success");
+    }
+
+    // Rebuild checkboxes & refresh analytics
+    buildEventCheckboxes();
+    await refreshAnalytics();
 }
 
 /* -------------------------------------------------------
@@ -91,6 +179,8 @@ function getSelectedEventIds() {
 async function refreshAnalytics() {
     resetFilters();
     aggregatedRows = [];
+
+    updateCloseButtonVisibility();
 
     const selected = getSelectedEventIds();
     if (!selected.length) {
@@ -487,6 +577,7 @@ function scrollToTable() {
         block: "start"
     });
 }
+
 
 
 
