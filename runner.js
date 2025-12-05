@@ -1,13 +1,12 @@
 // ------------------------------------------------------------
-// runner.js
-// Full Runner Mode Logic – Updated Dec 2025
+// runner.js – Fully Corrected Version (Dec 2025)
 // ------------------------------------------------------------
 
 let currentUserId = null;
 let currentUserEmail = null;
 
 /* ------------------------------------------------------------
-   Detect selected action mode (start / restock / end)
+   Detect Start / Restock / End mode
 ------------------------------------------------------------ */
 function getSelectedMode() {
   const radio = document.querySelector("input[name='mode']:checked");
@@ -15,11 +14,10 @@ function getSelectedMode() {
 }
 
 /* ------------------------------------------------------------
-   Load current authenticated user
+   Load authenticated user
 ------------------------------------------------------------ */
 async function loadCurrentUser() {
   const { data, error } = await supabase.auth.getUser();
-
   if (error) {
     console.error("Error loading current user:", error);
     return;
@@ -31,18 +29,15 @@ async function loadCurrentUser() {
   console.log("Current user:", currentUserId, currentUserEmail);
 
   const mobileUserEl = document.getElementById("mobile-username");
-  if (mobileUserEl && currentUserEmail) {
-    mobileUserEl.textContent = currentUserEmail;
-  }
+  if (mobileUserEl && currentUserEmail) mobileUserEl.textContent = currentUserEmail;
 }
 
 /* ------------------------------------------------------------
-   Load event dropdown
+   Load events
 ------------------------------------------------------------ */
 async function loadEvents() {
   const el = document.getElementById("event-select");
   if (!el) return;
-
   el.innerHTML = "";
 
   const { data, error } = await supabase
@@ -52,12 +47,7 @@ async function loadEvents() {
 
   if (error) {
     console.error("Events load error:", error);
-    el.innerHTML = "<option value=''>Error loading events</option>";
-    return;
-  }
-
-  if (!data || data.length === 0) {
-    el.innerHTML = "<option value=''>No events found</option>";
+    el.innerHTML = "<option>Error loading events</option>";
     return;
   }
 
@@ -86,18 +76,13 @@ async function loadFloors() {
     return;
   }
 
-  if (!data || data.length === 0) {
-    el.innerHTML = "<option>No floors found</option>";
-    return;
-  }
-
   el.innerHTML = data.map(f => `<option value="${f.id}">${f.name}</option>`).join("");
 
   await loadFridges();
 }
 
 /* ------------------------------------------------------------
-   Load fridges based on floor
+   Load fridges for selected floor
 ------------------------------------------------------------ */
 async function loadFridges() {
   const floorId = document.getElementById("floor-select").value;
@@ -121,11 +106,6 @@ async function loadFridges() {
     return;
   }
 
-  if (!data || data.length === 0) {
-    el.innerHTML = "<option>No fridges found</option>";
-    return;
-  }
-
   el.innerHTML = data.map(fr => `<option value="${fr.id}">${fr.name}</option>`).join("");
 }
 
@@ -144,16 +124,11 @@ async function loadDrinkTypes() {
     return;
   }
 
-  if (!data || data.length === 0) {
-    el.innerHTML = "<option>No drink types found</option>";
-    return;
-  }
-
   el.innerHTML = data.map(d => `<option value="${d.id}">${d.name}</option>`).join("");
 }
 
 /* ------------------------------------------------------------
-   Load history for selected combination
+   Load last 10 logs for selected (event + fridge + drink)
 ------------------------------------------------------------ */
 async function loadHistory() {
   const event_id = document.getElementById("event-select").value;
@@ -161,12 +136,9 @@ async function loadHistory() {
   const drink_type_id = document.getElementById("drink-select").value;
 
   const tbody = document.getElementById("history-body");
-  if (!tbody) return;
   tbody.innerHTML = "";
 
-  if (!event_id || !fridge_id || !drink_type_id) {
-    return;
-  }
+  if (!event_id || !fridge_id || !drink_type_id) return;
 
   const { data, error } = await supabase
     .from("fridge_log_entries")
@@ -179,61 +151,54 @@ async function loadHistory() {
 
   if (error) {
     console.error("History load error:", error);
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="3">Error loading history.</td>`;
-    tbody.appendChild(tr);
+    tbody.innerHTML = `<tr><td colspan="3">Error loading history.</td></tr>`;
     return;
   }
 
-  if (!data || data.length === 0) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="3">No history yet for this combination.</td>`;
-    tbody.appendChild(tr);
+  if (data.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="3">No history yet for this combination.</td></tr>`;
     return;
   }
 
   data.forEach(row => {
     const tr = document.createElement("tr");
-    const t = new Date(row.created_at).toLocaleString();
-
     tr.innerHTML = `
-      <td>${t}</td>
+      <td>${new Date(row.created_at).toLocaleString()}</td>
       <td>${row.action_type}</td>
       <td>${row.amount}</td>
     `;
-
     tbody.appendChild(tr);
   });
 }
 
 /* ------------------------------------------------------------
-   Load My Activity (joined with event status)
-   + disable editing for Closed events
+   Load My Activity (last 15 logs)
 ------------------------------------------------------------ */
 async function loadMyActivity() {
   const tbody = document.getElementById("my-activity-body");
-  if (!tbody) return;
   tbody.innerHTML = "";
 
   if (!currentUserId) {
-    tbody.innerHTML = `<tr><td colspan="8">Could not identify current user.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8">No user found.</td></tr>`;
     return;
   }
 
   const { data, error } = await supabase
     .from("fridge_log_entries")
-    .select(`
-      *,
-      events(*),
-      fridges(*),
-      floors(*),
-      drink_types(*)
-    `)
+    .select(
+      `
+      id, amount, action_type, created_at,
+      events ( id, name, status ),
+      fridges ( id, name ),
+      floors ( id, name ),
+      drink_types ( id, name )
+    `
+    )
     .eq("user_id", currentUserId)
     .order("created_at", { ascending: false })
     .limit(15);
 
-  if (error || !data) {
+  if (error) {
     console.error("My activity load error:", error);
     tbody.innerHTML = `<tr><td colspan="8">Error loading activity.</td></tr>`;
     return;
@@ -245,145 +210,124 @@ async function loadMyActivity() {
   }
 
   data.forEach(row => {
+    const closed = row.events?.status === "Closed";
     const tr = document.createElement("tr");
-
-    const isClosed = row.events?.status === "Closed";
-
-    const createdAt = new Date(row.created_at).toLocaleString();
-    const eventName = row.events?.name || "";
-    const floorName = row.floors?.name || "";
-    const fridgeName = row.fridges?.name || "";
-    const drinkName = row.drink_types?.name || "";
-
     tr.innerHTML = `
-      <td>${createdAt}</td>
-      <td>${eventName}</td>
-      <td>${floorName}</td>
-      <td>${fridgeName}</td>
-      <td>${drinkName}</td>
+      <td>${new Date(row.created_at).toLocaleString()}</td>
+      <td>${row.events?.name}</td>
+      <td>${row.floors?.name}</td>
+      <td>${row.fridges?.name}</td>
+      <td>${row.drink_types?.name}</td>
       <td>${row.action_type}</td>
       <td>${row.amount}</td>
     `;
 
-    const actionsTd = document.createElement("td");
+    const tdActions = document.createElement("td");
 
-    if (isClosed) {
-      const label = document.createElement("span");
-      label.textContent = "Event Closed";
-      label.style.color = "#888";
-      label.style.fontSize = "12px";
-      label.style.fontStyle = "italic";
-      actionsTd.appendChild(label);
+    if (closed) {
+      tdActions.innerHTML = `<span style="font-size:12px;color:#888;">Event Closed</span>`;
     } else {
       const editBtn = document.createElement("button");
       editBtn.textContent = "Edit";
       editBtn.className = "table-action-btn";
-      editBtn.addEventListener("click", () =>
-        editLogEntry(row.id, row.amount, row.action_type)
-      );
+      editBtn.onclick = () =>
+        editLogEntry(row.id, row.amount, row.action_type);
 
       const delBtn = document.createElement("button");
       delBtn.textContent = "Delete";
       delBtn.className = "table-action-btn danger";
-      delBtn.addEventListener("click", () => deleteLogEntry(row.id));
+      delBtn.onclick = () => deleteLogEntry(row.id);
 
-      actionsTd.appendChild(editBtn);
-      actionsTd.appendChild(delBtn);
+      tdActions.appendChild(editBtn);
+      tdActions.appendChild(delBtn);
     }
 
-    tr.appendChild(actionsTd);
+    tr.appendChild(tdActions);
     tbody.appendChild(tr);
   });
 }
 
 /* ------------------------------------------------------------
-   Edit log entry
+   Edit a log entry
 ------------------------------------------------------------ */
-async function editLogEntry(entryId, currentAmount, actionType) {
-  if (!entryId) return;
+async function editLogEntry(id, amount, type) {
+  const val = prompt(`Update amount for "${type}"`, amount);
+  if (val === null) return;
 
-  const newAmountStr = window.prompt(
-    `Update amount for "${actionType}" (current: ${currentAmount ?? 0})`,
-    currentAmount != null ? String(currentAmount) : "0"
-  );
-
-  if (newAmountStr === null) return;
-
-  const newAmount = parseInt(newAmountStr, 10);
+  const newAmount = parseInt(val, 10);
   if (isNaN(newAmount) || newAmount < 0) {
-    alert("Amount must be a non-negative number.");
+    alert("Invalid number.");
     return;
   }
 
   const { error } = await supabase
     .from("fridge_log_entries")
     .update({ amount: newAmount })
-    .eq("id", entryId)
+    .eq("id", id)
     .eq("user_id", currentUserId);
 
   if (error) {
-    alert("Event is CLOSED — editing is not allowed.");
-    console.error("Update error:", error);
+    alert("Event is CLOSED — editing not allowed.");
+    console.error(error);
   }
 
-  await loadHistory();
-  await loadMyActivity();
+  loadMyActivity();
+  loadHistory();
 }
 
 /* ------------------------------------------------------------
-   Delete log entry
+   Delete a log entry
 ------------------------------------------------------------ */
-async function deleteLogEntry(entryId) {
-  if (!entryId) return;
-
-  const ok = window.confirm("Are you sure you want to delete this entry?");
-  if (!ok) return;
+async function deleteLogEntry(id) {
+  if (!confirm("Delete this entry?")) return;
 
   const { error } = await supabase
     .from("fridge_log_entries")
     .delete()
-    .eq("id", entryId)
+    .eq("id", id)
     .eq("user_id", currentUserId);
 
   if (error) {
-    alert("Event is CLOSED — deleting is not allowed.");
-    console.error("Delete error:", error);
+    alert("Event is CLOSED — deleting not allowed.");
+    console.error(error);
   }
 
-  await loadHistory();
-  await loadMyActivity();
+  loadMyActivity();
+  loadHistory();
 }
 
 /* ------------------------------------------------------------
-   Submit new log
+   Submit a new log entry
 ------------------------------------------------------------ */
 async function handleSubmit(e) {
   e.preventDefault();
 
   const event_id = document.getElementById("event-select").value;
-  const fridge_id = document.getElementById("floor-select").value;
+  const fridge_id = document.getElementById("fridge-select").value; // FIXED
   const drink_type_id = document.getElementById("drink-select").value;
 
-  const status = document.getElementById("log-status");
-  status.textContent = "";
+  const statusEl = document.getElementById("log-status");
+  statusEl.textContent = "";
 
   const mode = getSelectedMode();
-  const amountInput = {
-    start: document.getElementById("start-count").value,
-    restock: document.getElementById("restock-count").value,
-    end: document.getElementById("end-count").value,
-  }[mode];
+  const amountVal =
+    mode === "start"
+      ? document.getElementById("start-count").value
+      : mode === "restock"
+      ? document.getElementById("restock-count").value
+      : document.getElementById("end-count").value;
+
+  const amount = parseInt(amountVal, 10);
 
   if (!event_id || !fridge_id || !drink_type_id) {
-    status.textContent = "❌ Please select all fields.";
-    status.classList.add("error");
+    statusEl.innerHTML = "❌ Please select all fields.";
+    statusEl.classList.add("error");
     return;
   }
 
-  const amount = parseInt(amountInput, 10);
   if (isNaN(amount) || amount < 0) {
-    status.textContent = "❌ Amount must be a non-negative number.";
-    status.classList.add("error");
+    statusEl.innerHTML = "❌ Invalid amount.";
+    statusEl.classList.add("error");
     return;
   }
 
@@ -396,31 +340,30 @@ async function handleSubmit(e) {
         drink_type_id,
         user_id: currentUserId,
         action_type: mode,
-        amount,
-      },
+        amount
+      }
     ]);
 
   if (error) {
     console.error(error);
-    status.textContent = "❌ Error saving log.";
-    status.classList.add("error");
+    statusEl.innerHTML = "❌ Error saving log.";
+    statusEl.classList.add("error");
     return;
   }
 
-  status.textContent = "✅ Log saved!";
-  status.classList.add("success");
+  statusEl.innerHTML = "✅ Log saved!";
+  statusEl.classList.add("success");
 
-  // Clear relevant input
   if (mode === "start") document.getElementById("start-count").value = "";
   if (mode === "restock") document.getElementById("restock-count").value = "";
   if (mode === "end") document.getElementById("end-count").value = "";
 
-  await loadHistory();
-  await loadMyActivity();
+  loadHistory();
+  loadMyActivity();
 }
 
 /* ------------------------------------------------------------
-   Initialise Runner mode
+   Init Runner Mode
 ------------------------------------------------------------ */
 async function initRunner() {
   await loadCurrentUser();
@@ -432,27 +375,23 @@ async function initRunner() {
 }
 
 /* ------------------------------------------------------------
-   DOM READY
+   DOM Ready
 ------------------------------------------------------------ */
 document.addEventListener("DOMContentLoaded", () => {
-  const form = document.getElementById("log-form");
-  if (form) form.addEventListener("submit", handleSubmit);
+  document.getElementById("log-form").addEventListener("submit", handleSubmit);
 
-  const floorSelect = document.getElementById("floor-select");
-  if (floorSelect) {
-    floorSelect.addEventListener("change", async () => {
-      await loadFridges();
-      await loadHistory();
-    });
-  }
-
-  ["event-select", "fridge-select", "drink-select"].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener("change", loadHistory);
+  document.getElementById("floor-select").addEventListener("change", async () => {
+    await loadFridges();
+    await loadHistory();
   });
 
-  initRunner().catch(err => console.error("Error initialising runner:", err));
+  ["event-select", "fridge-select", "drink-select"].forEach(id =>
+    document.getElementById(id)?.addEventListener("change", loadHistory)
+  );
+
+  initRunner();
 });
+
 
 
 
